@@ -1,6 +1,7 @@
 import asyncio
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
@@ -130,3 +131,9 @@ async def tenant_b(admin_engine: AsyncEngine, db_clean: None) -> TenantFixture: 
 @pytest.fixture
 def app_session_factory(app_engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
     return create_session_factory(app_engine)
+
+
+@pytest.fixture(scope="session")
+def env_example_text() -> str:
+    p = Path(".env.example")
+    return p.read_text() if p.exists() else ""

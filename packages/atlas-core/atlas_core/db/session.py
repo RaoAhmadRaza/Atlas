@@ -38,8 +38,6 @@ async def with_tenant_session(
 
     async with factory() as session:
         async with session.begin():
-            await session.execute(
-                text("SET LOCAL app.current_tenant = :tid"),
-                {"tid": str(tenant_id)},
-            )
+            # asyncpg rejects $1 params in SET statements; UUID is hex+hyphens only
+            await session.execute(text(f"SET LOCAL app.current_tenant = '{tenant_id!s}'"))
             yield session
