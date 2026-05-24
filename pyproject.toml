@@ -27,6 +27,7 @@ dev = [
   "pydantic>=2.6",
   "pydantic-settings>=2.2",
   "structlog>=24.0",
+  "psycopg2-binary>=2.9",
 ]
 
 [tool.ruff]
