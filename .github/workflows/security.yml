@@ -26,7 +26,7 @@ jobs:
       - name: Build api image for scanning
         run: docker build -f apps/api/Dockerfile -t atlas-api:scan .
       - name: Trivy CVE scan
-        uses: aquasecurity/trivy-action@0.31.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: atlas-api:scan
           exit-code: "1"
