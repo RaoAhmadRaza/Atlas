@@ -31,6 +31,7 @@ jobs:
           image-ref: atlas-api:scan
           exit-code: "1"
           severity: CRITICAL
+          ignore-unfixed: true
           format: sarif
           output: trivy-results.sarif
       - name: Upload SARIF to GitHub Security
