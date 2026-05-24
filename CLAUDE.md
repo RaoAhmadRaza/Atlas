@@ -1,9 +1,10 @@
 ## Project Status
 
-**Active module:** Module 1 — Multi-Tenant Database & RLS
+**Active module:** Module 2 — Document Ingestion Pipeline
 **Module 0 (Foundation):** Complete — monorepo scaffold, CI, Docker Compose, pre-commit hooks, secret scanning all green.
+**Module 1 (Database & RLS):** Complete — 10-table DDL + pgvector, RLS policies, Alembic baseline migration (`0001_baseline_schema.py`), `with_tenant_session()`, full test suite green.
 
-Next: implement 10-table DDL + pgvector, RLS policies, Alembic baseline migration, and `with_tenant_session()`. See [docs/MODULES.md](docs/MODULES.md#module-1--multi-tenant-database--rls).
+Next: `POST /v1/documents/upload`, arq worker (parse → chunk → embed → COPY insert), SSE progress endpoint. See [docs/MODULES.md](docs/MODULES.md#module-2--document-ingestion-pipeline).
 
 ## graphify
 
