@@ -9,7 +9,7 @@ import pytest_asyncio
 from alembic import command
 from alembic.config import Config
 from atlas_core.db.engine import create_engine
-from atlas_core.db.session import create_session_factory
+from atlas_core.db.session import create_session_factory, init_default_factory
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
@@ -47,6 +47,7 @@ async def admin_engine() -> AsyncEngine:  # type: ignore[misc]
 @pytest_asyncio.fixture(scope="session")
 async def app_engine() -> AsyncEngine:  # type: ignore[misc]
     engine = create_engine(_get_app_url())
+    init_default_factory(engine)
     yield engine
     await engine.dispose()
 
