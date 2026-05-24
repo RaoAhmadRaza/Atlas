@@ -61,9 +61,9 @@ async def _migrated_schema(admin_engine: AsyncEngine) -> None:  # type: ignore[m
             )
             result = row.one_or_none()
             if result is not None:
-                assert (
-                    result[0] is False and result[1] is False
-                ), "atlas role must be NOSUPERUSER NOBYPASSRLS — RLS tests would be meaningless"
+                assert result[0] is False and result[1] is False, (
+                    "atlas role must be NOSUPERUSER NOBYPASSRLS — RLS tests would be meaningless"
+                )
     except Exception:
         yield
         return
