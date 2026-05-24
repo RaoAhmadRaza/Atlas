@@ -49,6 +49,7 @@ ignore = ["S101", "ANN401"]
 strict = true
 python_version = "3.12"
 ignore_missing_imports = false
+warn_unused_ignores = false
 exclude = '(\.agents|\.claude|src/|graphify-out/|infra/migrations/)'
 explicit_package_bases = true
 

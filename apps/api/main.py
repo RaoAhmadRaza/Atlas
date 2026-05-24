@@ -30,7 +30,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.db_engine = engine
     app.state.db_factory = factory
 
-    redis_client = aioredis.from_url(settings.redis_url, decode_responses=True)
+    redis_client = aioredis.from_url(settings.redis_url, decode_responses=True)  # type: ignore[no-untyped-call]
     app.state.redis = redis_client
 
     arq_pool = await arq.create_pool(arq.connections.RedisSettings.from_dsn(settings.redis_url))

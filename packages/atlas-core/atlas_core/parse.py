@@ -42,7 +42,7 @@ def _parse_pdf(raw: bytes) -> str:
 
     import pymupdf
 
-    doc: object = pymupdf.open(stream=io.BytesIO(raw), filetype="pdf")
+    doc: object = pymupdf.open(stream=io.BytesIO(raw), filetype="pdf")  # type: ignore[no-untyped-call]
     return "\n".join(page.get_text() for page in doc)  # type: ignore[attr-defined]
 
 
