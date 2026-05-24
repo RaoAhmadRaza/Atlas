@@ -5,3 +5,7 @@ requires-python = ">=3.12"
 dependencies = [
   "pydantic>=2.6",
 ]
+
+[tool.setuptools.packages.find]
+include = ["atlas_schemas*"]
+exclude = ["node_modules*"]
