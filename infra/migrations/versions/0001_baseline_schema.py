@@ -169,10 +169,10 @@ def upgrade() -> None:
     op.execute("CREATE INDEX ix_documents_tenant_status ON documents (tenant_id, status)")
     op.execute("CREATE INDEX ix_chunks_document_id ON chunks (document_id)")
     op.execute(
-        "CREATE INDEX ix_messages_conversation_created " "ON messages (conversation_id, created_at)"
+        "CREATE INDEX ix_messages_conversation_created ON messages (conversation_id, created_at)"
     )
     op.execute(
-        "CREATE INDEX ix_usage_events_tenant_created " "ON usage_events (tenant_id, created_at)"
+        "CREATE INDEX ix_usage_events_tenant_created ON usage_events (tenant_id, created_at)"
     )
 
     # Tenant FK indexes (not auto-created by Postgres for FK columns)

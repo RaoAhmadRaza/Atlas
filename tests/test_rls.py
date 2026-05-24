@@ -23,7 +23,7 @@ _TENANT_SCOPED_TABLES = [
 async def _insert_doc(session: AsyncSession, tenant_id: object, title: str = "doc") -> object:
     doc_id = uuid4()
     await session.execute(
-        text("INSERT INTO documents (id, tenant_id, title) " "VALUES (:id, :tid, :title)"),
+        text("INSERT INTO documents (id, tenant_id, title) VALUES (:id, :tid, :title)"),
         {"id": doc_id, "tid": tenant_id, "title": title},
     )
     return doc_id
@@ -66,9 +66,7 @@ async def test_rls_blocks_insert_wrong_tenant(
         async with with_tenant_session(tenant_a.id, session_factory=app_session_factory) as s:
             # WITH CHECK rejects: tenant_id != current_setting
             await s.execute(
-                text(
-                    "INSERT INTO documents (id, tenant_id, title) " "VALUES (:id, :tid, 'hijack')"
-                ),
+                text("INSERT INTO documents (id, tenant_id, title) VALUES (:id, :tid, 'hijack')"),
                 {"id": uuid4(), "tid": tenant_b.id},
             )
 
@@ -82,7 +80,7 @@ async def test_rls_blocks_update_cross_tenant(
     doc_id = uuid4()
     async with admin_session.begin():
         await admin_session.execute(
-            text("INSERT INTO documents (id, tenant_id, title) " "VALUES (:id, :tid, 'original')"),
+            text("INSERT INTO documents (id, tenant_id, title) VALUES (:id, :tid, 'original')"),
             {"id": doc_id, "tid": tenant_a.id},
         )
 
@@ -108,7 +106,7 @@ async def test_rls_blocks_delete_cross_tenant(
     doc_id = uuid4()
     async with admin_session.begin():
         await admin_session.execute(
-            text("INSERT INTO documents (id, tenant_id, title) " "VALUES (:id, :tid, 'safe')"),
+            text("INSERT INTO documents (id, tenant_id, title) VALUES (:id, :tid, 'safe')"),
             {"id": doc_id, "tid": tenant_a.id},
         )
 
@@ -140,7 +138,7 @@ async def test_rls_enabled_on_all_tenant_tables(
     admin_session: AsyncSession,
 ) -> None:
     row = await admin_session.execute(
-        text("SELECT relrowsecurity FROM pg_class " "WHERE relname = :tbl AND relkind = 'r'"),
+        text("SELECT relrowsecurity FROM pg_class WHERE relname = :tbl AND relkind = 'r'"),
         {"tbl": table},
     )
     assert row.scalar() is True, f"RLS not enabled on {table}"

@@ -81,7 +81,7 @@ async def test_tenant_session_commits_on_success(
     doc_id = uuid4()
     async with with_tenant_session(tenant_a.id, session_factory=app_session_factory) as s:
         await s.execute(
-            text("INSERT INTO documents (id, tenant_id, title) " "VALUES (:id, :tid, 'test-doc')"),
+            text("INSERT INTO documents (id, tenant_id, title) VALUES (:id, :tid, 'test-doc')"),
             {"id": doc_id, "tid": tenant_a.id},
         )
 
@@ -102,8 +102,7 @@ async def test_tenant_session_rollback_on_exception(
         async with with_tenant_session(tenant_a.id, session_factory=app_session_factory) as s:
             await s.execute(
                 text(
-                    "INSERT INTO documents (id, tenant_id, title) "
-                    "VALUES (:id, :tid, 'rolled-back')"
+                    "INSERT INTO documents (id, tenant_id, title) VALUES (:id, :tid, 'rolled-back')"
                 ),
                 {"id": doc_id, "tid": tenant_a.id},
             )
