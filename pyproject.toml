@@ -1,0 +1,61 @@
+[project]
+name = "atlas"
+version = "0.1.0"
+requires-python = ">=3.12"
+
+[tool.uv.workspace]
+members = [
+  "apps/api",
+  "apps/ingestion-worker",
+  "apps/eval-runner",
+  "apps/mcp-server",
+  "packages/atlas-core",
+  "packages/atlas-schemas",
+]
+
+[dependency-groups]
+dev = [
+  "ruff>=0.4",
+  "mypy>=1.10",
+  "pytest>=8",
+  "pytest-asyncio>=0.23",
+  "pytest-cov>=5",
+  "httpx>=0.27",
+  "detect-secrets>=1.5",
+  "fastapi>=0.110",
+  "uvicorn[standard]>=0.29",
+  "pydantic>=2.6",
+  "pydantic-settings>=2.2",
+  "structlog>=24.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+exclude = [
+  ".agents",
+  ".claude",
+  ".venv",
+  "src",
+  "graphify-out",
+  "node_modules",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "S", "ANN"]
+ignore = ["S101"]
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+ignore_missing_imports = false
+exclude = '(\.agents|\.claude|src/|graphify-out/|infra/migrations/)'
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "--cov=packages/atlas-core --cov-report=xml --cov-fail-under=80"
+
+[tool.coverage.run]
+source = ["packages/atlas-core", "apps/api"]
+omit = ["*/tests/*", "*/__init__.py"]

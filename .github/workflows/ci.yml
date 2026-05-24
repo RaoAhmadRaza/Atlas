@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          python-version: "3.12"
+      - run: uv sync --all-packages
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy packages/atlas-core apps/api
+
+  lint-node:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter web lint
+      - run: pnpm --filter web typecheck
+
+  test:
+    needs: [lint-python, lint-node]
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: atlas_test
+          POSTGRES_USER: atlas
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    env:
+      DATABASE_URL: postgresql+asyncpg://atlas:test@localhost:5432/atlas_test
+      REDIS_URL: redis://localhost:6379/0
+      ENVIRONMENT: test
+      JWT_SECRET: test-secret-minimum-32-bytes-long-here!
+      ANTHROPIC_API_KEY: sk-ant-test-placeholder
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          python-version: "3.12"
+      - run: uv sync --all-packages
+      - run: uv run pytest --cov=packages/atlas-core --cov-report=xml --cov-fail-under=80
+      - uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+        if: always()
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build api image
+        run: docker build -f apps/api/Dockerfile -t atlas-api:ci .
+      - name: Build web image
+        run: docker build -f apps/web/Dockerfile -t atlas-web:ci .
+      - name: Build worker image
+        run: docker build -f apps/ingestion-worker/Dockerfile -t atlas-worker:ci .

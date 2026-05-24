@@ -1,0 +1,17 @@
+# Local development overrides — hot reload + bind mounts
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    volumes:
+      - ../apps/api:/app
+    environment:
+      ENVIRONMENT: development
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  web:
+    volumes:
+      - ../apps/web:/app/apps/web
+    environment:
+      ENVIRONMENT: development

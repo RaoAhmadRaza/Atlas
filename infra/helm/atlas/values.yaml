@@ -1,0 +1,19 @@
+replicaCount: 1
+
+image:
+  api:
+    repository: atlas-api
+    tag: latest
+    pullPolicy: IfNotPresent
+  web:
+    repository: atlas-web
+    tag: latest
+    pullPolicy: IfNotPresent
+
+service:
+  api:
+    type: ClusterIP
+    port: 8000
+  web:
+    type: ClusterIP
+    port: 3000

@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.uv/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+.pytest_cache/
+dist/
+
+# Node
+node_modules/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+
+# Secrets — .env.example and .secrets.baseline ARE committed
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+*.swp
+*.swo
+
+# Docker
+.docker/
+
+# Evals — reports are gitignored; baseline configs are committed
+evals/reports/*.json
+
+# Alembic compiled
+infra/migrations/versions/*.pyc
+
+# Generated graph outputs
+graphify-out/

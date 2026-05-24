@@ -1,0 +1,220 @@
+/* ============================================================
+   Atlas — Design System tokens (colors + typography + foundations)
+   Light is default; add data-theme="dark" on <html> for dark.
+   Fonts: Geist (UI), JetBrains Mono (code/numbers), Fraunces (display).
+   ============================================================ */
+
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400&family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@400;450;500&display=swap");
+
+:root {
+  /* ---- Color (Light) ---- */
+  --bg:              #FAF9F6;  /* warm paper, app background */
+  --bg-elev:         #FFFFFF;  /* cards, modals */
+  --bg-sunken:       #F2F0EB;  /* code blocks, inset panels */
+  --border:          #E6E2D9;  /* hairlines, dividers */
+  --border-strong:   #CFC9BC;  /* input borders */
+  --text:            #1A1A19;  /* primary text */
+  --text-muted:      #6B6862;  /* secondary text */
+  --text-subtle:     #9A968D;  /* captions, placeholders */
+  --accent:          #D14B27;  /* terracotta — CTA, focus, links */
+  --accent-hover:    #B33D1D;
+  --accent-bg:       #FBEDE6;  /* accent backgrounds (chips, hover rows) */
+  --success:         #2F7D4E;
+  --success-bg:      #E6F0EA;
+  --warn:            #B5821A;
+  --warn-bg:         #F6ECD3;
+  --error:           #B33A3A;
+  --error-bg:        #F4E3E3;
+  --info:            #2E5C8A;
+  --info-bg:         #E1EAF3;
+
+  /* ---- Type families ---- */
+  --ff-display: "Fraunces", "Iowan Old Style", Georgia, serif;
+  --ff-ui:      "Geist", -apple-system, "Inter", system-ui, sans-serif;
+  --ff-mono:    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* ---- Type scale (root 16px) ---- */
+  --fs-display-2xl: 72px;  --lh-display-2xl: 1.00;  --tr-display-2xl: -0.03em;
+  --fs-display-xl:  56px;  --lh-display-xl:  1.05;  --tr-display-xl:  -0.025em;
+  --fs-display-lg:  40px;  --lh-display-lg:  1.10;  --tr-display-lg:  -0.020em;
+  --fs-heading-xl:  28px;  --lh-heading-xl:  1.20;  --tr-heading-xl:  -0.015em;
+  --fs-heading-lg:  22px;  --lh-heading-lg:  1.30;  --tr-heading-lg:  -0.010em;
+  --fs-heading-md:  18px;  --lh-heading-md:  1.35;  --tr-heading-md:  -0.005em;
+  --fs-body-lg:     16px;  --lh-body-lg:     1.55;  --tr-body-lg:      0;
+  --fs-body-md:     14px;  --lh-body-md:     1.50;  --tr-body-md:      0;
+  --fs-body-sm:     13px;  --lh-body-sm:     1.45;  --tr-body-sm:      0.005em;
+  --fs-label:       12px;  --lh-label:       1.30;  --tr-label:        0.04em;
+  --fs-mono-lg:     16px;  --lh-mono-lg:     1.50;
+  --fs-mono-md:     13px;  --lh-mono-md:     1.50;
+  --fs-mono-sm:     12px;  --lh-mono-sm:     1.40;
+
+  /* ---- Spacing scale ---- */
+  --space-1:  2px;
+  --space-2:  4px;
+  --space-3:  6px;
+  --space-4:  8px;
+  --space-5: 12px;
+  --space-6: 16px;
+  --space-7: 20px;
+  --space-8: 24px;
+  --space-9: 32px;
+  --space-10: 40px;
+  --space-11: 48px;
+  --space-12: 64px;
+  --space-13: 80px;
+  --space-14: 120px;
+
+  /* ---- Radii ---- */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* ---- Borders ---- */
+  --border-width: 1px;
+
+  /* ---- Elevation (hairline-first; shadows only for floating) ---- */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04), 0 0 0 1px var(--border);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 0 0 1px var(--border);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,0.12), 0 0 0 1px var(--border);
+  --focus-ring: 0 0 0 3px var(--accent-bg);
+
+  /* ---- Motion ---- */
+  --motion-instant: 80ms ease-out;
+  --motion-fast:    160ms cubic-bezier(0.2, 0, 0, 1);
+  --motion-base:    220ms cubic-bezier(0.2, 0, 0, 1);
+  --motion-slow:    360ms cubic-bezier(0.2, 0, 0, 1);
+
+  /* ---- Layout ---- */
+  --shell-sidebar: 240px;
+  --shell-topbar:  52px;
+  --app-max:      1280px;
+  --marketing-max:1120px;
+}
+
+[data-theme="dark"] {
+  --bg:              #0E0E0C;
+  --bg-elev:         #181816;
+  --bg-sunken:       #080807;
+  --border:          #262522;
+  --border-strong:   #3A3934;
+  --text:            #EDEBE5;
+  --text-muted:      #9A968D;
+  --text-subtle:     #65625C;
+  --accent:          #E26A45;
+  --accent-hover:    #F08158;
+  --accent-bg:       #2A1610;
+  --success:         #4FA071;
+  --success-bg:      #16241B;
+  --warn:            #D19E3D;
+  --warn-bg:         #2A2010;
+  --error:           #D96565;
+  --error-bg:        #2A1414;
+  --info:            #5A8FC4;
+  --info-bg:         #122031;
+}
+
+/* ============================================================
+   Semantic element styles
+   ============================================================ */
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--ff-ui);
+  font-size: var(--fs-body-lg);
+  line-height: var(--lh-body-lg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Headings — app surfaces use Geist; marketing/editorial uses Fraunces (.display) */
+h1, .h1 {
+  font-family: var(--ff-ui);
+  font-size: var(--fs-display-lg);
+  line-height: var(--lh-display-lg);
+  letter-spacing: var(--tr-display-lg);
+  font-weight: 500;
+  margin: 0;
+}
+h2, .h2 {
+  font-family: var(--ff-ui);
+  font-size: var(--fs-heading-xl);
+  line-height: var(--lh-heading-xl);
+  letter-spacing: var(--tr-heading-xl);
+  font-weight: 500;
+  margin: 0;
+}
+h3, .h3 {
+  font-family: var(--ff-ui);
+  font-size: var(--fs-heading-lg);
+  line-height: var(--lh-heading-lg);
+  letter-spacing: var(--tr-heading-lg);
+  font-weight: 500;
+  margin: 0;
+}
+h4, .h4 {
+  font-family: var(--ff-ui);
+  font-size: var(--fs-heading-md);
+  line-height: var(--lh-heading-md);
+  letter-spacing: var(--tr-heading-md);
+  font-weight: 500;
+  margin: 0;
+}
+
+p, .body { font-size: var(--fs-body-lg); line-height: var(--lh-body-lg); margin: 0; }
+.body-md { font-size: var(--fs-body-md); line-height: var(--lh-body-md); }
+.body-sm { font-size: var(--fs-body-sm); line-height: var(--lh-body-sm); letter-spacing: var(--tr-body-sm); color: var(--text-muted); }
+
+.label, .eyebrow {
+  font-family: var(--ff-ui);
+  font-size: var(--fs-label);
+  line-height: var(--lh-label);
+  letter-spacing: var(--tr-label);
+  text-transform: uppercase;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.display, .display-xl {
+  font-family: var(--ff-display);
+  font-size: var(--fs-display-xl);
+  line-height: var(--lh-display-xl);
+  letter-spacing: var(--tr-display-xl);
+  font-weight: 400;
+}
+.display-2xl {
+  font-family: var(--ff-display);
+  font-size: var(--fs-display-2xl);
+  line-height: var(--lh-display-2xl);
+  letter-spacing: var(--tr-display-2xl);
+  font-weight: 400;
+}
+.display em, .display-xl em, .display-2xl em {
+  font-style: italic; color: var(--text-muted); font-weight: 400;
+}
+
+code, kbd, samp, .mono {
+  font-family: var(--ff-mono);
+  font-variant-numeric: tabular-nums;
+}
+.mono-lg { font-size: var(--fs-mono-lg); line-height: var(--lh-mono-lg); }
+.mono-md { font-size: var(--fs-mono-md); line-height: var(--lh-mono-md); }
+.mono-sm { font-size: var(--fs-mono-sm); line-height: var(--lh-mono-sm); }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { color: var(--accent-hover); }
+
+hr { border: 0; border-top: 1px solid var(--border); margin: var(--space-9) 0; }
+
+/* Selection */
+::selection { background: var(--accent-bg); color: var(--text); }
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
