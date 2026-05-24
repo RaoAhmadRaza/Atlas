@@ -43,7 +43,7 @@ exclude = [
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "S", "ANN"]
-ignore = ["S101", "ANN401", "ANN101", "ANN102"]
+ignore = ["S101", "ANN401"]
 
 [tool.mypy]
 strict = true
