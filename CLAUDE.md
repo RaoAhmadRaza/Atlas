@@ -6,6 +6,10 @@
 
 Next: `POST /v1/documents/upload`, arq worker (parse → chunk → embed → COPY insert), SSE progress endpoint. See [docs/MODULES.md](docs/MODULES.md#module-2--document-ingestion-pipeline).
 
+## Branch Rule
+
+**Each module gets its own branch (`module-N/short-name`).** Branch MUST NOT merge to `main` until: full implementation done, all tests pass, CI (lint-python + lint-node + test + build + security) is green on the branch.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
