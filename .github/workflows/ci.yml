@@ -17,7 +17,7 @@ jobs:
       - run: uv sync --all-packages
       - run: uv run ruff check .
       - run: uv run ruff format --check .
-      - run: uv run mypy packages/atlas-core apps/api
+      - run: uv run mypy packages/atlas-core apps/api apps/ingestion-worker/tasks apps/ingestion-worker/worker.py apps/ingestion-worker/embedders.py
 
   lint-node:
     runs-on: ubuntu-latest
@@ -60,6 +60,19 @@ jobs:
           --health-retries 5
         ports:
           - 6379:6379
+      minio:
+        image: minio/minio:latest
+        env:
+          MINIO_ROOT_USER: atlas
+          MINIO_ROOT_PASSWORD: atlas-minio-pw  # pragma: allowlist secret
+        options: >-
+          --health-cmd "curl -f http://localhost:9000/minio/health/live"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+        ports:
+          - 9000:9000
+        command: server /data
     env:
       DATABASE_URL: postgresql+asyncpg://atlas:test@localhost:5432/atlas_test
       DATABASE_URL_ADMIN: postgresql+asyncpg://atlas_admin:test@localhost:5432/atlas_test
@@ -67,6 +80,10 @@ jobs:
       ENVIRONMENT: test
       JWT_SECRET: test-secret-minimum-32-bytes-long-here!
       ANTHROPIC_API_KEY: sk-ant-test-placeholder
+      OBJECT_STORE_ENDPOINT: http://localhost:9000
+      OBJECT_STORE_BUCKET: atlas-test
+      OBJECT_STORE_ACCESS_KEY: atlas
+      OBJECT_STORE_SECRET_KEY: atlas-minio-pw  # pragma: allowlist secret
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
@@ -84,7 +101,7 @@ jobs:
             ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO atlas;
             ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE ON SEQUENCES TO atlas;
           "
-      - run: uv run pytest --cov=packages/atlas-core --cov-report=xml --cov-fail-under=80
+      - run: uv run pytest --cov=packages/atlas-core --cov=apps/api --cov=apps/ingestion-worker --cov-report=xml --cov-fail-under=80
       - name: Assert 100% coverage on db layer
         run: uv run coverage report --include='packages/atlas-core/atlas_core/db/*' --fail-under=100
       - uses: codecov/codecov-action@v4
