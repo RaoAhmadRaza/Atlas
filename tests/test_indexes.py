@@ -73,6 +73,7 @@ async def test_hnsw_index_used_in_query_plan(
         await conn.commit()
 
     query_vec = "[" + ",".join(str(x) for x in await _random_vec()) + "]"
+    await admin_session.execute(text("SET enable_seqscan = off"))
     row = await admin_session.execute(
         text(
             "EXPLAIN (ANALYZE, FORMAT JSON) "
@@ -80,6 +81,7 @@ async def test_hnsw_index_used_in_query_plan(
         ),
         {"qvec": query_vec},
     )
+    await admin_session.execute(text("SET enable_seqscan = on"))
     plan_json = row.scalar()
     plan_str = json.dumps(plan_json)
     assert "ix_chunks_embedding_hnsw" in plan_str, f"HNSW index not used in plan: {plan_str[:500]}"
