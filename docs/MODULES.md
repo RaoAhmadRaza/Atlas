@@ -5,7 +5,7 @@
 
 ---
 
-## Module 0 — Foundation & Repository Scaffold
+## Module 0 — Foundation & Repository Scaffold ✅ DONE
 
 **Goal:** Monorepo skeleton, CI green, Docker Compose up, pre-commit hooks, secret scanning.
 
@@ -162,11 +162,11 @@ atlas/
 - CI must pass green before Module 1 starts
 
 ### Acceptance Criteria
-- [ ] `docker compose up` brings all services healthy
-- [ ] `uv run pytest` exits 0
-- [ ] `pnpm tsc --noEmit` exits 0
-- [ ] CI green on push to `main`
-- [ ] `detect-secrets scan` finds 0 secrets in tracked files
+- [x] `docker compose up` brings all services healthy
+- [x] `uv run pytest` exits 0
+- [x] `pnpm tsc --noEmit` exits 0
+- [x] CI green on push to `main`
+- [x] `detect-secrets scan` finds 0 secrets in tracked files
 
 ---
 

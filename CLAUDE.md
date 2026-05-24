@@ -1,3 +1,10 @@
+## Project Status
+
+**Active module:** Module 1 — Multi-Tenant Database & RLS
+**Module 0 (Foundation):** Complete — monorepo scaffold, CI, Docker Compose, pre-commit hooks, secret scanning all green.
+
+Next: implement 10-table DDL + pgvector, RLS policies, Alembic baseline migration, and `with_tenant_session()`. See [docs/MODULES.md](docs/MODULES.md#module-1--multi-tenant-database--rls).
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.

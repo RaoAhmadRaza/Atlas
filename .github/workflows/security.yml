@@ -18,13 +18,15 @@ jobs:
 
   trivy-scan:
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
       - name: Build api image for scanning
         run: docker build -f apps/api/Dockerfile -t atlas-api:scan .
       - name: Trivy CVE scan
-        uses: aquasecurity/trivy-action@0.24.0
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: atlas-api:scan
           exit-code: "1"
