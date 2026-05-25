@@ -3,7 +3,9 @@ from uuid import uuid4
 import pytest
 from atlas_core.db.engine import get_database_url
 from atlas_core.db.session import create_session_factory, with_tenant_session
+from atlas_core.db.types import TSVectorType
 from sqlalchemy import text
+from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from tests.conftest import TenantFixture
@@ -15,6 +17,14 @@ async def _get_guc(session: AsyncSession, missing_ok: bool = True) -> str:
         {"ok": missing_ok},
     )
     return str(row.scalar() or "")
+
+
+# ── Types tests ───────────────────────────────────────────────────────────────
+
+
+def test_tsvector_type_properties() -> None:
+    assert TSVectorType.impl is TSVECTOR
+    assert TSVectorType.cache_ok is True
 
 
 # ── Engine tests ──────────────────────────────────────────────────────────────
