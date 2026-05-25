@@ -54,7 +54,7 @@ exclude = '(\.agents|\.claude|src/|graphify-out/|infra/migrations/)'
 explicit_package_bases = true
 
 [[tool.mypy.overrides]]
-module = ["pgvector.*", "aioboto3.*", "botocore.*", "FlagEmbedding.*", "arq.*", "aioredis.*", "redis.*"]
+module = ["pgvector.*", "aioboto3.*", "botocore.*", "FlagEmbedding.*", "arq.*", "aioredis.*", "redis.*", "cohere.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
