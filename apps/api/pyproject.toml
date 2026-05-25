@@ -17,6 +17,9 @@ dependencies = [
   "python-multipart>=0.0.9",
   "structlog>=24.0",
   "prometheus-client>=0.20",
+  "langgraph>=0.2",
+  "langgraph-checkpoint-postgres>=2.0",
+  "psycopg[async]>=3.1",
   "atlas-core",
   "atlas-schemas",
 ]

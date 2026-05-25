@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from apps.api.routers.documents import router as documents_router
+from apps.api.routers.query import router as query_router
 
 
 class Settings(BaseSettings):
@@ -45,6 +46,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="Atlas API", version="0.1.0", lifespan=lifespan)
 app.include_router(documents_router)
+app.include_router(query_router)
 
 
 @app.get("/healthz")
