@@ -1,10 +1,11 @@
 ## Project Status
 
-**Active module:** Module 2 — Document Ingestion Pipeline
+**Active module:** Module 3 — next module (TBD)
 **Module 0 (Foundation):** Complete — monorepo scaffold, CI, Docker Compose, pre-commit hooks, secret scanning all green.
 **Module 1 (Database & RLS):** Complete — 10-table DDL + pgvector, RLS policies, Alembic baseline migration (`0001_baseline_schema.py`), `with_tenant_session()`, full test suite green.
+**Module 2 (Document Ingestion Pipeline):** Complete — `POST /v1/documents/upload`, arq worker (parse → chunk → embed → COPY insert), SSE progress endpoint, HNSW + BM25 indexes, 66/66 tests green, CI green. Branch merged to `main`.
 
-Next: `POST /v1/documents/upload`, arq worker (parse → chunk → embed → COPY insert), SSE progress endpoint. See [docs/MODULES.md](docs/MODULES.md#module-2--document-ingestion-pipeline).
+Next: see [docs/MODULES.md](docs/MODULES.md) for Module 3 deliverables.
 
 ## Branch Rule
 
