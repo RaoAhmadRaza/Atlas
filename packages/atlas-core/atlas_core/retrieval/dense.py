@@ -23,10 +23,10 @@ class DenseRetriever:
             result = await session.execute(
                 text("""
                     SELECT id, content, metadata, token_count, document_id,
-                           1 - (embedding <=> :qvec::vector) AS score
+                           1 - (embedding <=> CAST(:qvec AS vector)) AS score
                     FROM chunks
                     WHERE embedding IS NOT NULL
-                    ORDER BY embedding <=> :qvec::vector
+                    ORDER BY embedding <=> CAST(:qvec AS vector)
                     LIMIT :k
                 """),
                 {"qvec": qvec_str, "k": k},
