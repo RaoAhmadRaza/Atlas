@@ -26,7 +26,7 @@ async def _insert_chunks(
             text(
                 "INSERT INTO chunks"
                 " (id, tenant_id, document_id, content, embedding, chunk_index, token_count)"
-                " VALUES (:id, :tid, :did, :content, :emb::vector, :idx, :tc)"
+                " VALUES (:id, :tid, :did, :content, CAST(:emb AS vector), :idx, :tc)"
             ),
             {
                 "id": str(uuid4()),
