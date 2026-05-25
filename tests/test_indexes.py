@@ -61,7 +61,7 @@ async def test_hnsw_index_used_in_query_plan(
         await admin_session.execute(
             text(
                 "INSERT INTO chunks (id, tenant_id, document_id, content, embedding, chunk_index) "
-                "VALUES (:id, :tid, :did, :content, :emb::vector, :idx)"
+                "VALUES (:id, :tid, :did, :content, CAST(:emb AS vector), :idx)"
             ),
             r,
         )
@@ -73,13 +73,15 @@ async def test_hnsw_index_used_in_query_plan(
         await conn.commit()
 
     query_vec = "[" + ",".join(str(x) for x in await _random_vec()) + "]"
+    await admin_session.execute(text("SET enable_seqscan = off"))
     row = await admin_session.execute(
         text(
             "EXPLAIN (ANALYZE, FORMAT JSON) "
-            "SELECT id FROM chunks ORDER BY embedding <=> :qvec::vector LIMIT 10"
+            "SELECT id FROM chunks ORDER BY embedding <=> CAST(:qvec AS vector) LIMIT 10"
         ),
         {"qvec": query_vec},
     )
+    await admin_session.execute(text("SET enable_seqscan = on"))
     plan_json = row.scalar()
     plan_str = json.dumps(plan_json)
     assert "ix_chunks_embedding_hnsw" in plan_str, f"HNSW index not used in plan: {plan_str[:500]}"
