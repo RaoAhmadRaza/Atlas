@@ -1,11 +1,12 @@
 ## Project Status
 
-**Active module:** Module 3 — next module (TBD)
+**Active module:** Module 4 — Query Orchestrator
 **Module 0 (Foundation):** Complete — monorepo scaffold, CI, Docker Compose, pre-commit hooks, secret scanning all green.
 **Module 1 (Database & RLS):** Complete — 10-table DDL + pgvector, RLS policies, Alembic baseline migration (`0001_baseline_schema.py`), `with_tenant_session()`, full test suite green.
-**Module 2 (Document Ingestion Pipeline):** Complete — `POST /v1/documents/upload`, arq worker (parse → chunk → embed → COPY insert), SSE progress endpoint, HNSW + BM25 indexes, 66/66 tests green, CI green. Branch merged to `main`.
+**Module 2 (Document Ingestion):** Complete — `POST /v1/documents/upload`, arq worker (parse → chunk → embed → COPY insert), SSE progress endpoint, full test suite green.
+**Module 3 (Retrieval Layer):** Complete — `DenseRetriever` (pgvector HNSW), `BM25Retriever` (GIN/ts_rank_cd), `HybridRetriever` (RRF k=60), `BGEReranker`/`CohereReranker`/`NoopReranker`, `compress()`, 20 tests, branch `module-3/retrieval-layer` pushed to CI.
 
-Next: see [docs/MODULES.md](docs/MODULES.md) for Module 3 deliverables.
+Next: `POST /v1/query`, `HybridRetriever` → reranker → compress → LLM generation, streaming response. See [docs/MODULES.md](docs/MODULES.md#module-4--query-orchestrator).
 
 ## Branch Rule
 

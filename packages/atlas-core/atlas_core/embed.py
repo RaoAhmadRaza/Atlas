@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import math
 import struct
 from typing import Protocol, runtime_checkable
 
@@ -27,6 +28,6 @@ class MockEmbedder:
         digest = hashlib.sha256(f"{self._seed}:{text}".encode()).digest()
         needed = self.DIM * 4
         raw = (digest * (needed // len(digest) + 1))[:needed]
-        floats = list(struct.unpack(f"{self.DIM}f", raw))
+        floats = [v if math.isfinite(v) else 0.0 for v in struct.unpack(f"{self.DIM}f", raw)]
         magnitude = sum(v * v for v in floats) ** 0.5 or 1.0
         return [v / magnitude for v in floats]
