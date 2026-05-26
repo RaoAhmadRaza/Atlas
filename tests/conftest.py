@@ -53,7 +53,7 @@ async def app_engine() -> AsyncEngine:  # type: ignore[misc]
 
 
 @pytest_asyncio.fixture(scope="session", autouse=True)
-async def _migrated_schema(admin_engine: AsyncEngine) -> None:  # type: ignore[misc]
+async def _migrated_schema(admin_engine: AsyncEngine, app_engine: AsyncEngine) -> None:  # type: ignore[misc]
     # When no DB is reachable (e.g. local unit-test runs without docker compose),
     # yield without migrating. DB-dependent tests will fail with a connection error.
     try:
