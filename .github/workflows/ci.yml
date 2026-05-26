@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main, dev, "module-*"]
   pull_request:
-    branches: [main]
+  workflow_dispatch:
 
 jobs:
   lint-python:
