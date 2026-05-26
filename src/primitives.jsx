@@ -2,20 +2,39 @@
 // Exported to window for cross-script use.
 // React hooks (useState/useEffect/useRef) are pre-bound on window via index.html.
 
-// Lucide icon wrapper. Lucide is loaded via CDN; this re-runs createIcons after mount.
+// Icon cache: renders Lucide icon off-screen once per name, caches the SVG string.
+// dangerouslySetInnerHTML used so React never owns SVG children — prevents removeChild mismatch.
+// Icon names are allowlisted to [a-z0-9-] before any DOM injection.
+var _iCache = Object.create(null);
+function _lucideHTML(name, sw) {
+  var k = name + '|' + sw;
+  if (k in _iCache) return _iCache[k];
+  _iCache[k] = '';
+  if (!window.lucide) return '';
+  var safeName = name.replace(/[^a-z0-9-]/g, '');
+  if (!safeName) return '';
+  var div = document.createElement('div');
+  var icon = document.createElement('i');
+  icon.setAttribute('data-lucide', safeName);
+  div.appendChild(icon);
+  document.body.appendChild(div);
+  try {
+    window.lucide.createIcons({ nameAttr: 'data-lucide', attrs: { 'stroke-width': String(sw) }, icons: window.lucide.icons });
+    var el = div.firstElementChild;
+    if (el) { el.removeAttribute('width'); el.removeAttribute('height'); _iCache[k] = el.outerHTML; }
+  } catch(e) {}
+  document.body.removeChild(div);
+  return _iCache[k];
+}
+
 function Icon({ name, size = 16, color, strokeWidth = 1.5, style, className }) {
-  const ref = useRef(null);
-  useEffect(() => {
-    if (window.lucide && ref.current) {
-      window.lucide.createIcons({ nameAttr: 'data-lucide', attrs: { 'stroke-width': strokeWidth }, icons: window.lucide.icons });
-    }
-  }, [name]);
-  return React.createElement('i', {
-    ref,
-    'data-lucide': name,
-    style: { width: size, height: size, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0, ...style },
-    className: 'icon ' + (className || ''),
-  });
+  return (
+    <span
+      style={{ width: size, height: size, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0, ...style }}
+      className={'icon ' + (className || '')}
+      dangerouslySetInnerHTML={{ __html: _lucideHTML(name, strokeWidth) }}
+    />
+  );
 }
 
 function Button({ variant = 'secondary', size = 'md', children, onClick, disabled, icon, iconRight, type, style }) {

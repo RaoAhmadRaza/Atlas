@@ -22,57 +22,93 @@ function Chat({ onOpenTrace, density = 'full' }) {
     }
   ]);
   const [streaming, setStreaming] = useState(null);
+  const [convId, setConvId] = useState(null);
   const scrollerRef = useRef(null);
 
   useEffect(() => {
     if (scrollerRef.current) scrollerRef.current.scrollTop = scrollerRef.current.scrollHeight;
   }, [messages, streaming]);
 
+  function parseCitationParts(text, citations) {
+    const parts = [];
+    let last = 0;
+    for (const m of text.matchAll(/\[(\d+)\]/g)) {
+      if (m.index > last) parts.push(text.slice(last, m.index));
+      parts.push({ cite: Number(m[1]) });
+      last = m.index + m[0].length;
+    }
+    if (last < text.length) parts.push(text.slice(last));
+    return parts.length ? parts : [text];
+  }
+
   function send() {
     if (!draft.trim()) return;
-    const userMsg = { role: 'user', text: draft.trim() };
-    setMessages(m => [...m, userMsg]);
+    const text = draft.trim();
+    setMessages(m => [...m, { role: 'user', text }]);
     setDraft('');
 
     const startTime = performance.now();
-    const stages = [
-      { name: 'Rewriting',  end: 200 },
-      { name: 'Retrieving', end: 500 },
-      { name: 'Reranking',  end: 900 },
-      { name: 'Generating', end: 2100 },
-      { name: 'Verifying',  end: 2400 },
-    ];
-    const finalCost = 0.0005, finalTokIn = 318, finalTokOut = 156;
-
+    const STAGE_MAP = { rewrite: 0, retrieve: 1, fuse: 1, rerank: 2, compress: 2, generate: 3, verify: 4 };
     setStreaming({ stageIdx: 0, elapsed: 0, cost: 0, tokOut: 0 });
+    let accText = '';
 
-    const iv = setInterval(() => {
-      const t = performance.now() - startTime;
-      let stageIdx = stages.findIndex(s => t < s.end);
-      if (stageIdx === -1) {
-        clearInterval(iv);
-        setStreaming(null);
-        setMessages(m => [...m, {
-          role: 'asst',
-          parts: [
-            "I'd need to pull the relevant chunks from your corpus to answer that precisely. In this demo the corpus contains a single AMD 10-K — try asking about Q4 2023 revenue, Data Center growth, or operating margin ",
-            { cite: 1 },
-            '.'
-          ],
-          meta: { latency: (t / 1000).toFixed(1) + ' s', tokIn: finalTokIn, tokOut: finalTokOut, cost: '$' + finalCost.toFixed(4), model: 'bge-rerank' }
-        }]);
-        return;
-      }
-      // smooth ramp of cost & tokens
-      const totalDur = stages[stages.length - 1].end;
-      const pct = Math.min(1, t / totalDur);
-      setStreaming({
-        stageIdx,
-        elapsed: t / 1000,
-        cost: finalCost * pct,
-        tokOut: Math.round(finalTokOut * pct),
-      });
-    }, 60);
+    api.stream('/v1/query', { query: text, conversation_id: convId })
+      .then(res => {
+        if (!res.ok) { setStreaming(null); return; }
+        const reader = res.body.getReader();
+        const dec = new TextDecoder();
+        (async function readSSE() {
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              for (const line of dec.decode(value).split('\n')) {
+                if (!line.startsWith('data: ')) continue;
+                let evt; try { evt = JSON.parse(line.slice(6)); } catch { continue; }
+                if (evt.type === 'meta') {
+                  setConvId(evt.conversation_id);
+                }
+                if (evt.type === 'stage') {
+                  const idx = STAGE_MAP[evt.stage] ?? 0;
+                  setStreaming(s => ({ ...s, stageIdx: idx, elapsed: (performance.now() - startTime) / 1000 }));
+                }
+                if (evt.type === 'token') {
+                  accText += evt.delta;
+                  setStreaming(s => ({ ...s, tokOut: s.tokOut + 1 }));
+                }
+                if (evt.type === 'done') {
+                  const elapsed = (performance.now() - startTime) / 1000;
+                  setStreaming(null);
+                  const parts = parseCitationParts(accText, evt.citations || []);
+                  setMessages(m => [...m, {
+                    role: 'asst',
+                    parts,
+                    meta: {
+                      latency: elapsed.toFixed(1) + ' s',
+                      tokIn: evt.cost?.tokens_in ?? 0,
+                      tokOut: evt.cost?.tokens_out ?? 0,
+                      cost: '$' + (evt.cost?.usd ?? 0).toFixed(4),
+                      model: 'bge-rerank',
+                    },
+                  }]);
+                }
+                if (evt.type === 'error') {
+                  setStreaming(null);
+                  const errMsg = evt.code === 402
+                    ? 'Budget exceeded — upgrade plan or wait for reset.'
+                    : (evt.message || 'Query failed — please retry.');
+                  setMessages(m => [...m, {
+                    role: 'asst',
+                    parts: [errMsg],
+                    meta: { latency: '—', tokIn: 0, tokOut: 0, cost: '$0.0000', model: '—' },
+                  }]);
+                }
+              }
+            }
+          } catch { setStreaming(null); }
+        })();
+      })
+      .catch(() => setStreaming(null));
   }
 
   const conversations = empty ? { today: [], yesterday: [], week: [] } : {

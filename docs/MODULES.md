@@ -22,7 +22,7 @@
 atlas/
 ├── apps/
 │   ├── api/                   # FastAPI — port 8000
-│   ├── web/                   # Next.js 15 — port 3000
+│   ├── web/                   # Vanilla React SPA — port 5173
 │   ├── ingestion-worker/      # arq worker
 │   ├── eval-runner/           # eval CLI
 │   └── mcp-server/            # FastMCP — port 8001
@@ -47,7 +47,7 @@ atlas/
 | `pyproject.toml` (root) | uv workspace definition |
 | `pnpm-workspace.yaml` | pnpm workspace definition |
 | `apps/api/pyproject.toml` | FastAPI app deps |
-| `apps/web/package.json` | Next.js app deps |
+| `index.html` + `src/` | Vanilla React SPA (Babel standalone, no bundler) |
 | `.github/workflows/ci.yml` | Main CI workflow |
 | `.github/workflows/security.yml` | Secret scanning + Trivy |
 | `infra/docker-compose.yml` | Full local stack |
@@ -160,6 +160,38 @@ atlas/
 - `tests/test_docker_compose.py`: all services start healthy
 - `tests/test_env.py`: all required env vars documented in `.env.example`
 - CI must pass green before Module 1 starts
+
+### Frontend Wiring
+
+**`index.html`** — inject API base URL before all other `<script>` tags:
+```html
+<script>window.ATLAS_API_URL = 'http://localhost:8000';</script>
+```
+
+**`apps/api/main.py`** — add CORS middleware so the browser can reach the API:
+```python
+from fastapi.middleware.cors import CORSMiddleware
+app.add_middleware(CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://localhost:8080", "null"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+```
+`"null"` origin required when `index.html` is opened directly as a `file://` URL. Tighten to production domain in Module 11.
+
+**Docker Compose `web` service** — serve `src/` + `index.html` on port 5173:
+```yaml
+web:
+  image: python:3.12-slim
+  command: python -m http.server 5173
+  working_dir: /app
+  volumes: [".:/app"]
+  ports: ["5173:5173"]
+  depends_on: [api]
+```
+
+No new endpoints. No `src/` file changes in this module.
 
 ### Acceptance Criteria
 - [x] `docker compose up` brings all services healthy
@@ -382,6 +414,10 @@ uv run alembic upgrade head
   run: uv run pytest tests/test_rls.py -v
 ```
 
+### Frontend Wiring
+
+No UI surfaces directly in this module — it is pure infrastructure. The `users` and `tenants` tables are what Module 6's `POST /v1/auth/login` and `POST /v1/auth/signup` endpoints write to. No `src/` file changes and no new API endpoints belong here.
+
 ### Acceptance Criteria
 - [ ] `alembic upgrade head` exits 0 on clean DB
 - [ ] Cross-tenant query returns 0 rows (proven by test)
@@ -564,6 +600,68 @@ class OpenAIEmbedder:
     REDIS_URL: redis://localhost:6379
 ```
 
+### Frontend Wiring
+
+Three `src/` files connect to the ingestion pipeline. Requires `src/api.js` from Module 6 — wire module in parallel or stub `api` temporarily.
+
+#### `src/pages/Documents.jsx`
+- **Remove:** hardcoded `docs` array (7 items), `useEffect(() => setTimeout(..., 700))` skeleton loader
+- **Add `GET /v1/documents`:**
+  ```js
+  useEffect(() => {
+    api.get('/v1/documents?limit=50')
+      .then(r => r.json())
+      .then(d => { setDocs(d.documents); setLoaded(true); })
+      .catch(() => setLoaded(true));
+  }, []);
+  ```
+- Response shape: `{documents: [{id, title, mime_type, status, status_label, byte_size, chunk_count, model, created_at}], total}`
+- **New endpoint:** `GET /v1/documents` — add to `apps/api/routers/documents.py`
+
+#### `src/pages/UploadModal.jsx` (`UploadDocumentsModal`)
+- **Remove:** `setInterval` fake progress in `upload()` function
+- **Replace with** two-step real upload:
+  ```js
+  async function upload(file) {
+    const form = new FormData();
+    form.append('file', file);
+    const { document_id } = await api.upload('/v1/documents/upload', form).then(r => r.json());
+    const res = await api.get(`/v1/documents/${document_id}/progress`);
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      for (const line of dec.decode(value).split('\n')) {
+        if (!line.startsWith('data: ')) continue;
+        const evt = JSON.parse(line.slice(6));
+        if (evt.stage) setProgress(evt.pct);
+        if (evt.stage === 'done') { setChunkCount(evt.chunk_count); onClose(); }
+        if (evt.stage === 'error') setError(evt.message);
+      }
+    }
+  }
+  ```
+- `POST /v1/documents/upload` already exists (Module 2 deliverable). `GET /v1/documents/{id}/progress` SSE already exists.
+
+#### `src/pages/DocumentDetail.jsx`
+- **Remove:** hardcoded `AMD-Q4-2023-10K.pdf` chunks array (5 items)
+- **Add** two fetches on mount:
+  ```js
+  // doc metadata
+  api.get(`/v1/documents/${docId}`).then(r => r.json()).then(setDoc);
+  // paginated chunks
+  api.get(`/v1/documents/${docId}/chunks?page=${page}&limit=20`).then(r => r.json()).then(d => setChunks(d.chunks));
+  ```
+- **New endpoints** (add to `apps/api/routers/documents.py`):
+  - `GET /v1/documents/{id}` → `{id, title, status, byte_size, chunk_count, model, created_at}`
+  - `GET /v1/documents/{id}/chunks?page=&limit=` → `{chunks: [{id, chunk_index, content, token_count, metadata}], total}`
+
+**New acceptance criteria:**
+- [ ] `GET /v1/documents` returns tenant-scoped list with correct status labels
+- [ ] Upload modal shows real SSE progress, closes on `done` event
+- [ ] DocumentDetail renders real chunks from API, pagination works
+
 ### Acceptance Criteria
 - [ ] 10MB PDF ingests in < 60s end-to-end
 - [ ] SSE emits all 5 stage events
@@ -712,6 +810,10 @@ def compress(chunks: list[ScoredChunk], budget_tokens: int = 3000) -> list[Score
 - `test_compress_respects_budget`: total tokens ≤ budget after compress()
 - Coverage: 80%+
 
+### Frontend Wiring
+
+No direct UI surfaces in this module. `HybridRetriever`, `BGEReranker`, and `compress()` are called internally by Module 4's `/v1/query` endpoint. Retrieval quality surfaces in the Chat page citation chips after Module 4 is wired.
+
 ### Acceptance Criteria
 - [ ] `HybridRetriever.retrieve()` returns in < 200ms on warm index (p99)
 - [ ] RRF correctly handles chunk in only one list
@@ -857,6 +959,63 @@ async def _track_cost(tenant_id: UUID, cost: CostSummary, conn) -> None:
 - `test_cost_written_to_db`: usage_events row inserted with correct tenant_id
 - `test_conversation_history`: second query in same conversation uses history
 - Coverage: 80%+
+
+### Frontend Wiring
+
+#### `src/pages/Chat.jsx`
+- **Remove:** entire fake `send()` function using `setInterval`, hardcoded `stages` array
+- **Replace** `send()` with real SSE reader:
+  ```js
+  async function send(query) {
+    setAnswer(''); setStage(''); setCitations([]); setError(null);
+    const res = await api.stream('/v1/query', {
+      query,
+      conversation_id: currentConvId || null,
+      retriever: tweaks?.retriever || 'hybrid',
+      reranker:  tweaks?.reranker  || 'bge',
+    });
+    if (!res.ok) { setError((await res.json()).detail); return; }
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      for (const line of dec.decode(value).split('\n')) {
+        if (!line.startsWith('data: ')) continue;
+        const evt = JSON.parse(line.slice(6));
+        if (evt.type === 'meta')   { setCurrentConvId(evt.conversation_id); setTraceId(evt.query_id); }
+        if (evt.type === 'stage')  setStage(evt.stage);
+        if (evt.type === 'token')  setAnswer(a => a + evt.delta);
+        if (evt.type === 'done')   { setCitations(evt.citations); setCost(evt.cost); setStage('done'); }
+        if (evt.type === 'error')  setError(evt.message);
+      }
+    }
+  }
+  ```
+- Wire citation chips: clicking a citation calls `setTraceCite(citation)` + `setTraceOpen(true)` to open `TraceDrawer`
+- Wire "New chat" button: `POST /v1/conversations` → store returned `conversation_id` in state
+
+#### `src/AppShell.jsx` — conversation sidebar
+- **Remove:** hardcoded conversation list (currently static nav items)
+- **Add** `GET /v1/conversations` on mount to populate sidebar history list
+  ```js
+  useEffect(() => {
+    api.get('/v1/conversations?limit=20').then(r => r.json()).then(d => setConversations(d.conversations));
+  }, []);
+  ```
+
+**New endpoints** (add to `apps/api/routers/conversations.py` — new file):
+- `GET /v1/conversations` → `{conversations: [{id, title, updated_at, last_message_preview}]}`
+- `POST /v1/conversations` → `{conversation_id}`
+- `GET /v1/conversations/{id}/messages` → `{messages: [{role, content, citations, created_at}]}`
+
+Also add `trace_id` (= `query_id`) to the `done` SSE event so Module 7's TraceDrawer can fetch it.
+
+**New acceptance criteria:**
+- [ ] Chat `send()` reads real SSE stream, tokens appear progressively
+- [ ] Conversation persists in sidebar after first message
+- [ ] Citation chip click opens TraceDrawer (wired fully in Module 7)
+- [ ] Budget exceeded → 402 shown as inline error in chat
 
 ### Acceptance Criteria
 - [ ] First token streamed within 2s (p95)
@@ -1018,6 +1177,59 @@ jobs:
 - `test_bootstrap_significant`: large delta → p < 0.05
 - Coverage: 100% on metrics.py, 80%+ overall
 
+### Frontend Wiring
+
+#### `src/pages/Operations.jsx` — `EvalsDashboard` component
+- **Remove:** hardcoded `runs` array (4 mock eval run rows)
+- **Add:**
+  ```js
+  useEffect(() => {
+    api.get('/v1/evals/runs?limit=20')
+      .then(r => r.json())
+      .then(d => setRuns(d.runs));
+  }, []);
+  ```
+- Response shape: `{runs: [{id, dataset, config_name, status, recall_at_5, mrr, faithfulness, created_at}]}`
+- Wire "Re-run" button: `POST /v1/evals/runs` `{config: "hybrid_bge", dataset: "combined-v3"}`
+
+#### `src/pages/EvalRunDetail.jsx` (`EvalReport`)
+- **Remove:** hardcoded `configs` array (5 configs with r5/r10/mrr/faith/p95/cost)
+- **Add** on mount (derive `runId` from `window.location.hash`):
+  ```js
+  useEffect(() => {
+    api.get(`/v1/evals/runs/${runId}`)
+      .then(r => r.json())
+      .then(d => setRunData(d));
+  }, [runId]);
+  ```
+- Response shape: `{id, started_at, commit, dataset, configs: [{name, r5, r10, mrr, faith, p95_ms, cost_usd, best}], headline, ci_bounds}`
+- Forest plot and table both driven by `runData.configs`
+
+#### `src/pages/EvalCompare.jsx`
+- **Remove:** synthetic `dataFor()` function
+- **Add:**
+  ```js
+  useEffect(() => {
+    api.get(`/v1/evals/compare?run_a=${idA}&run_b=${idB}`)
+      .then(r => r.json())
+      .then(setCompareData);
+  }, [idA, idB]);
+  ```
+- Response shape: `{delta_recall5, delta_mrr, ci_95, p_value, run_a: {...metrics}, run_b: {...metrics}}`
+
+**New endpoints** (add to `apps/api/routers/evals.py` — new file):
+- `GET /v1/evals/runs?limit=` — list runs
+- `POST /v1/evals/runs` — enqueue new eval job
+- `GET /v1/evals/runs/{id}` — full report with per-config breakdown
+- `GET /v1/evals/runs/{id}/questions?page=&limit=` — per-question results (Per-question tab)
+- `GET /v1/evals/runs/{id}/failures?limit=` — low-score questions (Failures tab)
+- `GET /v1/evals/compare?run_a=&run_b=` — paired bootstrap delta + CI
+
+**New acceptance criteria:**
+- [ ] EvalsDashboard lists real runs from DB
+- [ ] EvalRunDetail forest plot and table driven by API data
+- [ ] EvalCompare shows real delta + CI from paired bootstrap
+
 ### Acceptance Criteria
 - [ ] Smoke eval (50Q) runs in < 5 min on CI
 - [ ] Nightly eval (1000Q) runs in < 30 min
@@ -1026,167 +1238,205 @@ jobs:
 
 ---
 
-## Module 6 — Frontend (Next.js 15 App Router)
+## Module 6 — Frontend Wiring (Vanilla React SPA)
 
-**Goal:** Full multi-page app: auth, chat, documents, evals, settings, API keys, billing, MCP help.
+**Goal:** Wire the complete vanilla React SPA (`src/` + `index.html`) to real backend APIs — auth, chat, documents, evals, settings, API keys. Remove all mock data and fake timers.
 
-**Ref:** TRD §8 (Frontend Architecture), API Reference §Auth, prd.md §2
+**Ref:** API Reference §Auth, prd.md §2. Frontend lives at `src/` + `index.html` (Babel standalone, hash routing, zero bundler).
 
 ### Deliverables
-- Next.js 15 App Router with BFF pattern (JWT in HTTP-only cookie)
-- Chat interface with SSE streaming answer
-- Document upload with progress
-- Evals dashboard with metric charts
-- Settings pages (8 sub-pages)
-- API key management
-- MCP connection help
+- `src/api.js` — authenticated fetch wrapper using `window.ATLAS_API_URL`
+- `src/AuthContext.jsx` — React Context for session (JWT + tenant_id)
+- `src/App.jsx` updated — AuthProvider wrapper + auth-guard route check
+- `src/pages/Auth.jsx` wired — Login, Signup, Onboarding call real endpoints
+- `src/pages/Dashboard.jsx` wired — KPI cards from `GET /v1/dashboard/stats`
+- `src/pages/Settings1.jsx` wired — Profile, Tenant, Members, Billing, Danger tabs
+- `src/pages/Settings2.jsx` wired — Retrieval, Models, Budgets tabs
+- New FastAPI routers: `auth.py`, `tenants.py`, `dashboard.py`
 
-### App Router Structure
+### New Files
 
-```
-apps/web/app/
-├── (auth)/
-│   ├── login/page.tsx
-│   ├── signup/page.tsx
-│   └── onboarding/page.tsx
-├── (app)/
-│   ├── layout.tsx              # sidebar + top nav shell
-│   ├── chat/page.tsx
-│   ├── documents/page.tsx
-│   ├── evals/
-│   │   ├── page.tsx            # EvalsDashboard
-│   │   └── compare/page.tsx    # EvalCompare
-│   ├── settings/
-│   │   ├── profile/page.tsx
-│   │   ├── models/page.tsx
-│   │   ├── retrieval/page.tsx
-│   │   ├── budgets/page.tsx
-│   │   ├── members/page.tsx
-│   │   ├── billing/page.tsx
-│   │   └── danger/page.tsx
-│   └── api-keys/page.tsx
-├── (marketing)/
-│   ├── page.tsx                # landing
-│   └── pricing/page.tsx
-└── api/                        # BFF routes
-    ├── auth/[...nextauth]/route.ts
-    ├── query/route.ts           # proxy → FastAPI SSE
-    └── upload/route.ts          # proxy → FastAPI upload
-```
+#### `src/api.js`
+```js
+// src/api.js  —  authenticated fetch wrapper
+const BASE = () => window.ATLAS_API_URL || 'http://localhost:8000';
 
-### Key Components
-
-```typescript
-// Chat with streaming
-// apps/web/components/StreamingAnswer.tsx
-export function StreamingAnswer({ conversationId }: { conversationId: string }) {
-  const [tokens, setTokens] = useState<string[]>([])
-  const [citations, setCitations] = useState<Citation[]>([])
-  const [stage, setStage] = useState<string>('')
-
-  const sendMessage = async (query: string) => {
-    const res = await fetch('/api/query', {
-      method: 'POST',
-      body: JSON.stringify({ query, conversation_id: conversationId })
-    })
-    const reader = res.body!.getReader()
-    const decoder = new TextDecoder()
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      const lines = decoder.decode(value).split('\n')
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue
-        const event = JSON.parse(line.slice(6))
-        if (event.type === 'token') setTokens(t => [...t, event.delta])
-        if (event.type === 'stage') setStage(event.stage)
-        if (event.type === 'done') setCitations(event.citations)
-      }
-    }
-  }
-  // render ...
+function authHeaders(extra = {}) {
+  const s = JSON.parse(localStorage.getItem('atlas_session') || 'null');
+  return {
+    'Content-Type': 'application/json',
+    ...(s?.token     && { 'Authorization': `Bearer ${s.token}` }),
+    ...(s?.tenant_id && { 'X-Tenant-ID': s.tenant_id }),
+    ...extra,
+  };
 }
 
-// Citation chip
-// apps/web/components/CitationChip.tsx
-export function CitationChip({ citation }: { citation: Citation }) {
-  return (
-    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-800 cursor-pointer"
-          onClick={() => openSourceDrawer(citation)}>
-      [{citation.index}] {citation.title}
-    </span>
-  )
-}
-
-// Upload dropzone
-// apps/web/components/UploadDropzone.tsx
-export function UploadDropzone() {
-  const onDrop = async (files: File[]) => {
-    for (const file of files) {
-      const form = new FormData()
-      form.append('file', file)
-      const res = await fetch('/api/upload', { method: 'POST', body: form })
-      const { document_id } = await res.json()
-      subscribeToProgress(document_id)
-    }
-  }
-  // react-dropzone ...
-}
+const api = {
+  get:    (path)       => fetch(BASE() + path, { headers: authHeaders() }),
+  post:   (path, body) => fetch(BASE() + path, { method: 'POST',   headers: authHeaders(), body: JSON.stringify(body) }),
+  patch:  (path, body) => fetch(BASE() + path, { method: 'PATCH',  headers: authHeaders(), body: JSON.stringify(body) }),
+  del:    (path)       => fetch(BASE() + path, { method: 'DELETE', headers: authHeaders() }),
+  upload: (path, form) => fetch(BASE() + path, { method: 'POST',
+    headers: { 'Authorization': authHeaders()['Authorization'], 'X-Tenant-ID': authHeaders()['X-Tenant-ID'] },
+    body: form }),
+  stream: (path, body) => fetch(BASE() + path, { method: 'POST', headers: authHeaders(), body: JSON.stringify(body) }),
+};
+Object.assign(window, { api });
 ```
 
-### Authentication (BFF Pattern)
+#### `src/AuthContext.jsx`
+```jsx
+// src/AuthContext.jsx
+const AuthCtx = React.createContext(null);
 
-```typescript
-// apps/web/app/api/auth/[...nextauth]/route.ts
-// JWT stored in HTTP-only cookie, never in localStorage
-// Forwarded to FastAPI as Authorization: Bearer <jwt>
-export const authOptions: NextAuthOptions = {
-  providers: [
-    CredentialsProvider({
-      credentials: { email: {}, password: {} },
-      authorize: async (creds) => {
-        const res = await fetch(`${API_URL}/v1/auth/login`, {
-          method: 'POST', body: JSON.stringify(creds)
-        })
-        if (!res.ok) return null
-        return res.json()
-      }
-    })
-  ],
-  session: { strategy: 'jwt' },
-  callbacks: {
-    jwt: ({ token, user }) => user ? { ...token, access_token: user.access_token } : token,
-    session: ({ session, token }) => ({ ...session, access_token: token.access_token })
+function AuthProvider({ children }) {
+  const [session, setSession] = React.useState(
+    () => JSON.parse(localStorage.getItem('atlas_session') || 'null')
+  );
+  const login  = s => { localStorage.setItem('atlas_session', JSON.stringify(s)); setSession(s); };
+  const logout = () => { localStorage.removeItem('atlas_session'); setSession(null); };
+  return <AuthCtx.Provider value={{ session, login, logout }}>{children}</AuthCtx.Provider>;
+}
+
+function useSession() { return React.useContext(AuthCtx); }
+Object.assign(window, { AuthCtx, AuthProvider, useSession });
+```
+
+### `index.html` Load Order
+
+Add these lines **before** existing `<script>` tags:
+```html
+<script>window.ATLAS_API_URL = 'http://localhost:8000';</script>
+<script src="src/api.js" type="text/babel"></script>
+<script src="src/AuthContext.jsx" type="text/babel"></script>
+```
+
+### Modified Files
+
+#### `src/App.jsx`
+- Wrap root JSX in `<AuthProvider>`
+- Auth-guard all app-group routes: check `session !== null`, redirect to `#/login` if null:
+  ```js
+  function ProtectedRoute({ children }) {
+    const { session } = useSession();
+    React.useEffect(() => { if (!session) window.location.hash = '/login'; }, [session]);
+    return session ? children : null;
   }
+  ```
+
+#### `src/pages/Auth.jsx` — `Login`
+- **Remove:** `setTimeout(900)` fake login
+- **Replace with:**
+  ```js
+  async function submit(e) {
+    e.preventDefault();
+    const res = await api.post('/v1/auth/login', { email, password });
+    const data = await res.json();
+    if (!res.ok) { setError(data.detail); return; }
+    login({ token: data.access_token, user: data.user, tenant_id: data.tenant_id });
+    window.location.hash = '/dashboard';
+  }
+  ```
+
+#### `src/pages/Auth.jsx` — `Signup`
+- **Remove:** fake `setTimeout`
+- **Replace with:** `POST /v1/auth/signup` `{email, password, org_name}` → same session shape → redirect to `#/onboarding`
+
+#### `src/pages/Auth.jsx` — `Onboarding`
+- **Remove:** hardcoded "next" click
+- **Replace with:** `PATCH /v1/tenants/me` `{slug: orgSlug}` → redirect to `#/dashboard`
+
+#### `src/pages/Dashboard.jsx`
+- **Remove:** hardcoded KPIs (1,247 queries, 38 docs, 0.91 faithfulness, $12.40)
+- **Replace with:**
+  ```js
+  useEffect(() => {
+    api.get('/v1/dashboard/stats').then(r => r.json()).then(setStats);
+  }, []);
+  ```
+- Response: `{queries_today, queries_delta_pct, doc_count, avg_faithfulness, spend_usd, spend_delta_pct}`
+
+#### `src/pages/Settings1.jsx`
+| Tab | Remove | Add |
+|-----|--------|-----|
+| Profile | hardcoded name/email display | `GET /v1/auth/me` on mount; `PATCH /v1/auth/me` on save |
+| Tenant | hardcoded org name/slug | `GET /v1/tenants/me`; `PATCH /v1/tenants/me` on save |
+| Members | hardcoded member list | `GET /v1/tenants/me/members` |
+| Billing | hardcoded plan badge | `GET /v1/tenants/me` (plan field) |
+| Danger | fake delete confirmation | `DELETE /v1/tenants/me` with confirm dialog |
+
+#### `src/pages/Settings2.jsx`
+| Tab | Remove | Add |
+|-----|--------|-----|
+| Retrieval | local state only | `GET /v1/tenants/me/settings` on mount; `PATCH /v1/tenants/me/settings` on save |
+| Models | local state only | same endpoint, `model_config` field |
+| Budgets | local state only | `GET /v1/tenants/me/budget`; `PATCH /v1/tenants/me/budget` |
+
+### New Backend Endpoints
+
+Add to `apps/api/routers/auth.py`:
+```python
+POST /v1/auth/login     → {access_token, token_type, user: {id, email, role}, tenant_id}
+POST /v1/auth/signup    → same shape (creates tenant + user row)
+GET  /v1/auth/me        → {id, email, role, tenant: {id, slug, plan}}
+PATCH /v1/auth/me       → update email / password / display_name
+```
+
+Add to `apps/api/routers/tenants.py`:
+```python
+GET   /v1/tenants/me             → {id, slug, plan, created_at}
+PATCH /v1/tenants/me             → update slug
+GET   /v1/tenants/me/members     → {members: [{id, email, role, created_at}]}
+DELETE /v1/tenants/me            → 204 (cascades all tenant data)
+GET   /v1/tenants/me/settings    → {retriever, reranker, model, chunk_size}
+PATCH /v1/tenants/me/settings    → update retrieval/model config
+GET   /v1/tenants/me/budget      → {daily_usd_limit, monthly_tokens, alert_threshold}
+PATCH /v1/tenants/me/budget      → upsert budget policy
+```
+
+Add to `apps/api/routers/dashboard.py`:
+```python
+GET /v1/dashboard/stats → {
+  queries_today: int, queries_delta_pct: float,
+  doc_count: int, avg_faithfulness: float,
+  spend_usd: float, spend_delta_pct: float
 }
 ```
 
 ### Tests Required
-- `test_login_flow`: Playwright E2E — login → redirect to /chat
-- `test_upload_flow`: Playwright E2E — drop file → progress bar → "ready"
-- `test_chat_streaming`: Playwright E2E — send query → tokens appear
-- `test_citation_chips`: rendered answer contains citation chips
-- `test_settings_navigation`: all 7 settings sub-pages render
-- Unit tests for `StreamingAnswer`, `CitationChip`, `UploadDropzone` (React Testing Library)
+- `test_login_returns_jwt`: `POST /v1/auth/login` → 200 with `access_token`
+- `test_signup_creates_tenant`: new user signup → `tenants` row exists
+- `test_auth_guard`: request to protected route without JWT → 401
+- `test_me_returns_profile`: `GET /v1/auth/me` with valid JWT → user object
+- `test_settings_roundtrip`: PATCH settings → GET returns updated value
+- `test_budget_upsert`: PATCH budget → GET budget reflects new limits
+- `test_dashboard_stats`: `GET /v1/dashboard/stats` returns correct aggregate counts
+- Frontend (dev-server + Playwright or manual):
+  - Login flow: valid creds → `atlas_session` in localStorage → `#/dashboard`
+  - Auth guard: `#/chat` without session → `#/login`
+  - Dashboard KPI cards show real numbers
 - Coverage: 80%+
 
 ### CI/CD
+
 ```yaml
 # .github/workflows/ci.yml additions
-- name: Next.js build
-  run: pnpm --filter web build
-- name: Playwright E2E
-  uses: ./.github/workflows/e2e.yml
-  with:
-    base_url: http://localhost:3000
+- name: Lint frontend (eslint)
+  run: npx eslint src/ --ext .js,.jsx
+- name: Serve frontend + smoke test
+  run: |
+    python -m http.server 5173 &
+    sleep 1
+    curl -f http://localhost:5173/ | grep -q 'Atlas'
 ```
 
 ### Acceptance Criteria
-- [ ] Chat page: first token < 2s (Playwright assertion)
-- [ ] Upload: progress bar updates live
-- [ ] JWT never stored in localStorage (Security header check)
-- [ ] All 8 settings pages render without error
-- [ ] Lighthouse accessibility score ≥ 90
+- [ ] `POST /v1/auth/login` returns JWT with `tenant_id`
+- [ ] Login page calls real API, stores session in localStorage
+- [ ] Auth-guarded routes redirect to `#/login` when no session
+- [ ] Dashboard KPI cards populated from `GET /v1/dashboard/stats`
+- [ ] All 8 Settings sub-pages save and reload data from API
+- [ ] JWT stored in localStorage (NOT in HTTP-only cookie — vanilla SPA, no BFF)
 
 ---
 
@@ -1266,6 +1516,42 @@ groups:
 - `test_pii_not_logged`: log output does not contain raw email or query
 - `test_langsmith_trace_created`: mock LangSmith SDK, verify trace created on query
 - Coverage: 80%+
+
+### Frontend Wiring
+
+#### `src/pages/TraceDrawer.jsx`
+- **Remove:** hardcoded trace nodes array (rewrite/retrieve/rerank/generate/verify), hardcoded chunk list, hardcoded verifier result
+- **Add** `GET /v1/traces/{traceId}` on open (traceId comes from the `done` SSE event's `query_id` field — added in Module 4):
+  ```js
+  useEffect(() => {
+    if (!traceId) return;
+    api.get(`/v1/traces/${traceId}`)
+      .then(r => r.json())
+      .then(setTrace);
+  }, [traceId]);
+  ```
+- Response shape: `{id, query, stages: [{name, duration_ms, tokens_in, tokens_out}], chunks: [{id, content, score}], citations, verify_attempts, cost}`
+- Render `trace.stages` as the timeline; `trace.chunks` as the source panel; `trace.verify_attempts` as the verifier badge
+
+#### `src/pages/Operations.jsx` — `Traces` component
+- **Remove:** hardcoded `traces` array (4 mock rows)
+- **Add:**
+  ```js
+  useEffect(() => {
+    api.get('/v1/traces?limit=50').then(r => r.json()).then(d => setTraces(d.traces));
+  }, []);
+  ```
+- Response shape: `{traces: [{id, query_preview, latency_ms, cost_usd, status, created_at}]}`
+
+**New endpoints** (add `apps/api/routers/traces.py` — new file):
+- `GET /v1/traces?limit=&offset=` — list traces for tenant, tenant-scoped via RLS
+- `GET /v1/traces/{id}` — full trace: DAG node timings, compressed chunks, citation verification log
+
+Also update Module 4's `done` SSE event to include `"query_id"` (the trace ID stored in the LangSmith run or a local `query_runs` table).
+
+**New acceptance criteria:**
+- [ ] TraceDrawer renders real DAG timing from `GET /v1/traces/{id}`
+- [ ] Traces list in Operations tab shows real tenant traces
 
 ### Acceptance Criteria
 - [ ] `/metrics` returns all 6 custom metrics
@@ -1369,6 +1655,30 @@ async def call_llm_with_fallback(prompt: str) -> str:
 - `test_llm_fallback`: primary LLM error → haiku used
 - Coverage: 80%+
 
+### Frontend Wiring
+
+#### `src/pages/Operations.jsx` — `Usage` component
+- **Remove:** hardcoded cost bar chart data (7 days × 2 models), total spend $12.40, tokens/query stats
+- **Add:**
+  ```js
+  useEffect(() => {
+    Promise.all([
+      api.get('/v1/usage/summary?days=7').then(r => r.json()),
+      api.get('/v1/usage/events?limit=50').then(r => r.json()),
+    ]).then(([summary, events]) => { setSummary(summary); setEvents(events.events); });
+  }, []);
+  ```
+- `summary` shape: `{total_spend_usd, total_tokens, queries_count, per_day: [{date, spend_usd, tokens, queries}]}`
+- `events` shape: `{events: [{id, event_type, tokens_in, tokens_out, cost_usd, meta, created_at}]}`
+- Bar chart rendered from `summary.per_day`; detail table from `events`
+
+**New endpoints** (add `apps/api/routers/usage.py` — new file):
+- `GET /v1/usage/summary?days=N` — aggregate spend + tokens + per-day breakdown, tenant-scoped
+- `GET /v1/usage/events?limit=&offset=` — raw `usage_events` rows, tenant-scoped via RLS
+
+**New acceptance criteria:**
+- [ ] Usage tab shows real spend and token data from `usage_events` table
+
 ### Acceptance Criteria
 - [ ] Cache hit rate ≥ 30% after warm-up (measured in eval)
 - [ ] Rate limit fires correctly at configured threshold
@@ -1467,6 +1777,57 @@ async def create_api_key(req: CreateKeyRequest, tenant_id: UUID = Depends(get_te
 - `test_resource_lists_documents`: `atlas://acme/documents` returns doc list
 - `test_mcp_stdio_transport`: MCP server starts on stdio, responds to initialize
 - Coverage: 80%+
+
+### Frontend Wiring
+
+#### `src/pages/ApiKeysMcpHelp.jsx` — `ApiKeys` component
+- **Remove:** hardcoded keys array (3 mock keys), fake `createKey()` / `revoke()` handlers
+- **Add:**
+  ```js
+  // load
+  useEffect(() => {
+    api.get('/v1/api-keys').then(r => r.json()).then(d => setKeys(d.keys));
+  }, []);
+
+  // create
+  async function createKey(label) {
+    const data = await api.post('/v1/api-keys', { label }).then(r => r.json());
+    setNewKeyValue(data.key); // show raw key once in reveal modal
+    setKeys(k => [...k, { id: data.id, label, created_at: new Date().toISOString() }]);
+  }
+
+  // revoke
+  async function revokeKey(id) {
+    await api.del(`/v1/api-keys/${id}`);
+    setKeys(k => k.filter(key => key.id !== id));
+  }
+  ```
+- Response shapes:
+  - `GET /v1/api-keys` → `{keys: [{id, label, created_at, last_used, expires_at}]}`
+  - `POST /v1/api-keys` → `{key: "atlas_...", id, label}` — raw key returned once only
+- After POST: display `newKeyValue` in a one-time modal; set `newKeyValue = null` on close (never shown again)
+
+#### `src/pages/ApiKeysMcpHelp.jsx` — `McpConnection` component
+- **Remove:** fake "Test connection" `setTimeout`
+- **Replace with:**
+  ```js
+  async function testConnection(apiKey) {
+    setTesting(true);
+    const data = await api.post('/v1/mcp/test', { api_key: apiKey }).then(r => r.json());
+    setTestResult(data); // {status: "ok", latency_ms} or {status: "error", message}
+    setTesting(false);
+  }
+  ```
+
+**New endpoints** (update `apps/api/routers/apikeys.py`):
+- `GET /v1/api-keys` — list tenant keys (key_hash never returned; only label + metadata)
+- `DELETE /v1/api-keys/{id}` — revoke key
+- `POST /v1/mcp/test` — ping MCP server at `ATLAS_MCP_URL` with given API key, return `{status, latency_ms}`
+
+**New acceptance criteria:**
+- [ ] API key list loads from DB; new key raw value shown exactly once
+- [ ] Revoke removes key from DB and from UI list
+- [ ] MCP test endpoint returns latency on success, error message on failure
 
 ### Acceptance Criteria
 - [ ] `search_atlas` tool works in Claude Desktop
@@ -1591,6 +1952,45 @@ jobs:
 - `test_trivy_no_critical`: Trivy scan finds 0 CRITICAL CVEs
 - `test_fly_deploy`: smoke test against Fly.io staging after deploy
 
+### Frontend Wiring
+
+#### `index.html` — production API URL
+- Change `window.ATLAS_API_URL` to `'https://api.atlas.run'` for the production build
+- Inject via nginx `sub_filter` so the same `index.html` works in all envs:
+  ```nginx
+  sub_filter 'window.ATLAS_API_URL = '"'"'http://localhost:8000'"'"'' 'window.ATLAS_API_URL = '"'"'${ATLAS_API_URL}'"'"'';
+  sub_filter_once on;
+  ```
+  Or pass as a Docker build ARG and `sed` at image build time.
+
+#### `apps/web/Dockerfile` — nginx static server (new file)
+```dockerfile
+FROM nginx:1.27-alpine
+COPY index.html /usr/share/nginx/html/
+COPY src/ /usr/share/nginx/html/src/
+COPY infra/nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 80
+```
+
+#### `infra/nginx.conf` (new file)
+```nginx
+server {
+  listen 80;
+  root /usr/share/nginx/html;
+  location / { try_files $uri $uri/ /index.html; }
+  location ~* \.(js|jsx|css|png|svg|ico)$ {
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+  }
+}
+```
+
+Add `web` image build to the CI security workflow alongside `api` and `worker`.
+
+**New acceptance criteria:**
+- [ ] `docker build apps/web/` produces a working nginx image serving `index.html`
+- [ ] `ATLAS_API_URL` injection works so same image points at prod vs staging
+
 ### Acceptance Criteria
 - [ ] `docker compose -f docker-compose.prod.yml up` starts cleanly
 - [ ] `fly deploy` succeeds for api + worker
@@ -1644,13 +2044,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline'; "  # Next.js requires unsafe-inline
+            "script-src 'self' 'unsafe-inline'; "  # Babel standalone + CDN UMD scripts require unsafe-inline
             "connect-src 'self' https://api.atlas.run;"
         )
         return response
 ```
 
-### CSRF Protection (Next.js BFF)
+### CSRF Protection
 
 ```typescript
 // apps/web/middleware.ts
@@ -1672,6 +2072,40 @@ export function middleware(req: NextRequest) {
 - `test_detect_secrets_ci`: CI fails if secret committed
 - `test_owasp_deps`: no CRITICAL OWASP findings in Python deps
 - Coverage: 80%+
+
+### Frontend Wiring
+
+#### `index.html` — Content Security Policy meta tag
+Add before other `<meta>` tags:
+```html
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'self';
+  script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net;
+  connect-src 'self' http://localhost:8000 https://api.atlas.run;
+  style-src 'self' 'unsafe-inline';
+">
+```
+`'unsafe-inline'` is required for Babel standalone and CDN UMD scripts — document this tradeoff. For production, consider a precompiled bundle to remove `'unsafe-inline'`.
+
+#### `apps/api/main.py` — tighten CORS for production
+```python
+import os
+ALLOWED_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
+app.add_middleware(CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,  # set to https://atlas.run in prod
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+```
+
+#### CSRF note
+The vanilla SPA sends JWTs via `Authorization: Bearer` header (set by `src/api.js`). Bearer header auth is immune to CSRF because browsers never auto-attach custom headers cross-origin. Remove the Next.js-era CSRF middleware reference — it does not apply here.
+
+**New acceptance criteria:**
+- [ ] CSP meta tag present in `index.html`
+- [ ] `CORS_ORIGINS` env var controls allowed origins; default is `localhost:5173`
+- [ ] No CSRF middleware needed (Bearer token auth is CSRF-safe by design)
 
 ### Acceptance Criteria
 - [ ] Prompt injection test suite: 10/10 injections blocked
@@ -1724,7 +2158,7 @@ docker compose up
 \`\`\`
 
 ## Architecture
-[diagram: user → Next.js BFF → FastAPI → LangGraph DAG → PostgreSQL/pgvector]
+[diagram: user → Vanilla React SPA → FastAPI → LangGraph DAG → PostgreSQL/pgvector]
 
 ## Deploy to Fly.io (~$25/month)
 ...
@@ -1758,6 +2192,47 @@ Post-launch:
 - PR checklist (tests, coverage, eval smoke, lint)
 - Conventional commits format
 - Caveman mode and graphify usage guide
+
+### Frontend Wiring
+
+#### `README.md` updates
+- Replace architecture diagram caption: `user → Vanilla React SPA (hash routing) → FastAPI → LangGraph DAG → PostgreSQL/pgvector`
+- Remove all Next.js and BFF references
+- Update Quick Start section:
+  ```bash
+  git clone https://github.com/you/atlas
+  cd atlas
+  cp .env.example .env  # add ANTHROPIC_API_KEY
+  docker compose up
+  # → open http://localhost:5173
+  ```
+- Confirm `docker compose up` starts the nginx `web` container on port 5173
+
+#### `CONTRIBUTING.md` frontend section
+Add:
+```markdown
+## Frontend Development
+
+No bundler required. Serve the project root with any static file server:
+
+\`\`\`bash
+python -m http.server 5173   # from project root
+# or
+npx serve . -l 5173
+\`\`\`
+
+Override the API base URL in your browser console for local testing:
+\`\`\`js
+localStorage.setItem('atlas_session', JSON.stringify({...}));
+window.ATLAS_API_URL = 'http://localhost:8000';
+\`\`\`
+
+To lint: `npx eslint src/ --ext .js,.jsx`
+```
+
+**New acceptance criteria:**
+- [ ] `README.md` quick start uses `http://localhost:5173`, no Next.js references
+- [ ] `CONTRIBUTING.md` explains no-bundler frontend dev setup
 
 ### Acceptance Criteria
 - [ ] `docker compose up` + `README.md` quick start works for a new developer

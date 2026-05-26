@@ -9,7 +9,7 @@ from functools import partial
 from typing import Any, cast
 from uuid import UUID, uuid4
 
-import anthropic as anthropic_sdk
+import openai
 from atlas_core.db.session import with_tenant_session
 from atlas_core.embed import MockEmbedder
 from atlas_core.retrieval import BM25Retriever, DenseRetriever, NoopReranker
@@ -53,7 +53,7 @@ async def _run_pipeline(
     dense_retriever = DenseRetriever(embedder=embedder, conn_factory=conn_factory)
     bm25_retriever = BM25Retriever(conn_factory=conn_factory)
     reranker = NoopReranker()
-    llm_client = anthropic_sdk.AsyncAnthropic()
+    llm_client = openai.AsyncOpenAI()
 
     token = _sse_queue_var.set(queue)
     try:

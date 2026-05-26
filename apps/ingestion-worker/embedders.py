@@ -17,8 +17,14 @@ class BGEEmbedder:
     async def embed_batch(self, texts: list[str]) -> list[list[float]]:
         if not texts:
             return []
+        import numpy as np
+
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(
-            None,
-            lambda: self._model.encode(texts, batch_size=32, normalize_embeddings=True).tolist(),
-        )
+
+        def _encode() -> list[list[float]]:
+            vecs = self._model.encode(texts, batch_size=32)
+            norms = np.linalg.norm(vecs, axis=1, keepdims=True)
+            norms = np.where(norms == 0, 1.0, norms)
+            return (vecs / norms).tolist()
+
+        return await loop.run_in_executor(None, _encode)
