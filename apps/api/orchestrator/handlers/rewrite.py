@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-import anthropic
+import openai
 from langchain_core.runnables import RunnableConfig
 
 from apps.api.orchestrator.conversation import fetch_history
@@ -15,7 +15,7 @@ async def rewrite_node(state: QueryState, config: RunnableConfig) -> dict[str, o
         await queue.put(json.dumps({"type": "stage", "stage": "rewrite"}))
 
     conn_factory = config["configurable"]["conn_factory"]
-    llm_client: anthropic.AsyncAnthropic = config["configurable"]["llm_client"]
+    llm_client: openai.AsyncOpenAI = config["configurable"]["llm_client"]
 
     history_text = ""
     conv_id = state.get("conversation_id")
@@ -32,13 +32,10 @@ async def rewrite_node(state: QueryState, config: RunnableConfig) -> dict[str, o
             f"Rewrite this query to be self-contained: {state['query']}"
         )
 
-    msg = await llm_client.messages.create(
-        model="claude-haiku-4-5-20251001",
+    msg = await llm_client.chat.completions.create(
+        model="gpt-4o-mini",
         max_tokens=256,
         messages=[{"role": "user", "content": content}],
     )
-    first = msg.content[0] if msg.content else None
-    rewritten = (
-        first.text.strip() if isinstance(first, anthropic.types.TextBlock) else state["query"]
-    )
-    return {"rewritten_query": rewritten}
+    rewritten = msg.choices[0].message.content or state["query"]
+    return {"rewritten_query": rewritten.strip()}

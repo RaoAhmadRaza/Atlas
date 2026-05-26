@@ -7,7 +7,19 @@ function UploadDocumentsModal({ open, onClose }) {
   const [chunkSize, setChunkSize] = useState(512);
   const [embedding, setEmbedding] = useState('bge-large');
   const [phase, setPhase] = useState('pick'); // pick | uploading | done
+  const [uploadError, setUploadError] = useState(null);
   const intervalRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  useEffect(() => () => { if (intervalRef.current) clearInterval(intervalRef.current); }, []);
+
+  useEffect(() => {
+    if (phase !== 'uploading' || !files.length) return;
+    if (files.every(f => f.status === 'done' || f.status === 'error')) {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      setPhase('done');
+    }
+  }, [files, phase]);
 
   if (!open) return null;
 
@@ -33,38 +45,68 @@ function UploadDocumentsModal({ open, onClose }) {
   function startUpload() {
     if (!files.length) return;
     setPhase('uploading');
+    setUploadError(null);
     setFiles(curr => curr.map(f => ({ ...f, status: 'uploading', progress: 0 })));
 
-    let elapsed = 0;
-    intervalRef.current = setInterval(() => {
-      elapsed += 120;
-      setFiles(curr => {
-        let allDone = true;
-        const next = curr.map((f, idx) => {
-          // Stagger each file by 300 ms
-          const start = idx * 300;
-          if (elapsed < start) { allDone = false; return f; }
-          const localElapsed = elapsed - start;
-          const dur = Math.max(800, f.size / 3000); // bigger files take longer
-          if (localElapsed >= dur) return { ...f, progress: 100, status: 'done' };
-          allDone = false;
-          return { ...f, progress: Math.min(99, Math.round((localElapsed / dur) * 100)), status: 'uploading' };
-        });
-        if (allDone) {
-          clearInterval(intervalRef.current);
-          setPhase('done');
-        }
-        return next;
-      });
-    }, 120);
-  }
+    const withFile = files.filter(f => f._file);
+    const noFile = files.filter(f => !f._file);
 
-  useEffect(() => () => { if (intervalRef.current) clearInterval(intervalRef.current); }, []);
+    if (noFile.length) {
+      let elapsed = 0;
+      intervalRef.current = setInterval(() => {
+        elapsed += 120;
+        setFiles(curr => curr.map(f => {
+          if (f._file) return f;
+          const idx = noFile.findIndex(s => s.id === f.id);
+          const start = idx * 300;
+          if (elapsed < start) return f;
+          const localElapsed = elapsed - start;
+          const dur = Math.max(800, f.size / 3000);
+          if (localElapsed >= dur) return { ...f, progress: 100, status: 'done' };
+          return { ...f, progress: Math.min(99, Math.round((localElapsed / dur) * 100)), status: 'uploading' };
+        }));
+      }, 120);
+    }
+
+    withFile.forEach(f => {
+      const form = new FormData();
+      form.append('file', f._file);
+
+      api.upload('/v1/documents/upload', form)
+        .then(r => { if (!r.ok) throw new Error('upload failed'); return r.json(); })
+        .then(({ document_id }) => api.get(`/v1/documents/${document_id}/progress`))
+        .then(res => {
+          const reader = res.body.getReader();
+          const dec = new TextDecoder();
+          (async function readProgress() {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              for (const line of dec.decode(value).split('\n')) {
+                if (!line.startsWith('data: ')) continue;
+                let evt; try { evt = JSON.parse(line.slice(6)); } catch { continue; }
+                setFiles(prev => prev.map(p => {
+                  if (p.id !== f.id) return p;
+                  if (evt.stage === 'done') return { ...p, progress: 100, status: 'done' };
+                  if (evt.stage === 'error') return { ...p, status: 'error' };
+                  return { ...p, progress: evt.pct ?? p.progress };
+                }));
+              }
+            }
+          })();
+        })
+        .catch(err => {
+          setFiles(prev => prev.map(p => p.id === f.id ? { ...p, status: 'error' } : p));
+          setUploadError(err.message || 'Upload failed — is the API server running?');
+        });
+    });
+  }
 
   function close() {
     if (intervalRef.current) clearInterval(intervalRef.current);
     setFiles([]);
     setPhase('pick');
+    setUploadError(null);
     onClose();
   }
 
@@ -92,6 +134,29 @@ function UploadDocumentsModal({ open, onClose }) {
 
         {/* Body */}
         <div style={{ padding: 24, overflowY: 'auto', flex: 1 }}>
+          {/* Hidden real file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept=".pdf,.docx,.md,.html,.txt"
+            style={{ display: 'none' }}
+            onChange={e => {
+              Array.from(e.target.files || []).forEach(f =>
+                addFile({ name: f.name, size: f.size, type: (f.name.split('.').pop() || '').toUpperCase(), _file: f })
+              );
+              e.target.value = '';
+            }}
+          />
+
+          {/* Upload error banner */}
+          {uploadError && (
+            <div style={{ marginBottom: 12, padding: '10px 14px', background: 'var(--danger-bg, #fef2f2)', border: '1px solid var(--danger, #dc2626)', borderRadius: 'var(--radius-md)', fontSize: 13, color: 'var(--danger, #dc2626)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Icon name="alert-circle" size={14} />
+              {uploadError}
+            </div>
+          )}
+
           {/* Drop zone */}
           {phase === 'pick' && (
             <>
@@ -104,12 +169,9 @@ function UploadDocumentsModal({ open, onClose }) {
                     e.preventDefault();
                     e.currentTarget.classList.remove('over');
                     const dropped = Array.from(e.dataTransfer.files);
-                    dropped.forEach(f => addFile({ name: f.name, size: f.size, type: (f.name.split('.').pop() || '').toUpperCase() }));
+                    dropped.forEach(f => addFile({ name: f.name, size: f.size, type: (f.name.split('.').pop() || '').toUpperCase(), _file: f }));
                   }}
-                  onClick={() => {
-                    // Fake file picker — just load samples
-                    loadSamples();
-                  }}
+                  onClick={() => fileInputRef.current && fileInputRef.current.click()}
                 >
                   <Icon name="upload-cloud" size={36} style={{ color: 'var(--text-muted)', marginBottom: 14 }} />
                   <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--text)', marginBottom: 4 }}>Drop files here, or click to browse</div>

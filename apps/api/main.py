@@ -1,3 +1,4 @@
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -5,7 +6,9 @@ import arq
 import redis.asyncio as aioredis
 from atlas_core.db.engine import create_engine, get_database_url
 from atlas_core.db.session import create_session_factory, init_default_factory
+from dotenv import load_dotenv
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from apps.api.routers.documents import router as documents_router
@@ -25,6 +28,7 @@ settings = Settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    load_dotenv(override=True)
     engine = create_engine(get_database_url())
     factory = create_session_factory(engine)
     init_default_factory(engine)
@@ -45,6 +49,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Atlas API", version="0.1.0", lifespan=lifespan)
+
+_CORS_ORIGINS = os.getenv(
+    "CORS_ORIGINS",
+    "http://localhost:5173,http://localhost:5500,http://127.0.0.1:5500,http://localhost:8080,null",
+).split(",")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.include_router(documents_router)
 app.include_router(query_router)
 

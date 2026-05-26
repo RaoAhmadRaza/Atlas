@@ -88,9 +88,7 @@ function App() {
     }
   }, [tweaks.accent, tweaks.theme]);
 
-  // re-init lucide on route change
   useEffect(() => {
-    if (window.lucide) window.lucide.createIcons();
     setSidebarOpen(false);
   }, [route, traceOpen, cmdK]);
 
@@ -316,4 +314,30 @@ function AtlasTweaks({ tweaks, setTweak }) {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16, background: 'var(--bg)', fontFamily: 'var(--ff-ui)' }}>
+          <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--text)' }}>Something went wrong</div>
+          <pre style={{ fontSize: 12, color: 'var(--danger)', background: 'var(--bg-sunken)', padding: '12px 16px', borderRadius: 8, maxWidth: 600, overflow: 'auto' }}>{this.state.error.message}</pre>
+          <button style={{ fontSize: 13, padding: '8px 16px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg)', cursor: 'pointer', color: 'var(--text)' }} onClick={() => this.setState({ error: null })}>Try again</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>
+);
