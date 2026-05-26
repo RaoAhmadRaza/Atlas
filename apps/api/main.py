@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from apps.api.routers.documents import router as documents_router
+from apps.api.routers.evals import router as evals_router
 from apps.api.routers.query import router as query_router
 
 
@@ -64,6 +65,7 @@ app.add_middleware(
 
 app.include_router(documents_router)
 app.include_router(query_router)
+app.include_router(evals_router)
 
 
 @app.get("/healthz")

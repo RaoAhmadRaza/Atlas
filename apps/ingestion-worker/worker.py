@@ -3,6 +3,7 @@ import os
 import arq
 from dotenv import load_dotenv
 from tasks.ingest import ingest_document
+from tasks.run_eval import run_eval_job
 
 load_dotenv(override=True)
 
@@ -26,7 +27,7 @@ async def on_shutdown(ctx: dict) -> None:
 
 
 class WorkerSettings:
-    functions = [ingest_document]
+    functions = [ingest_document, run_eval_job]
     on_startup = on_startup
     on_shutdown = on_shutdown
     max_tries = 3

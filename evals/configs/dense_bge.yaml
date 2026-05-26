@@ -1,0 +1,3 @@
+name: dense_bge
+retriever: dense
+reranker: bge
