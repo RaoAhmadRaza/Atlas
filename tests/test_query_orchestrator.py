@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import AsyncGenerator
-from contextlib import asynccontextmanager
 from decimal import Decimal
 from functools import partial
 from unittest.mock import AsyncMock, MagicMock
@@ -56,26 +55,31 @@ def _mock_llm(answer: str = "test answer") -> MagicMock:
     mock = MagicMock()
 
     rewrite_resp = MagicMock()
-    rewrite_resp.content = [MagicMock(text="rewritten query")]
-    mock.messages.create = AsyncMock(return_value=rewrite_resp)
+    rewrite_resp.choices = [MagicMock()]
+    rewrite_resp.choices[0].message.content = "rewritten query"
 
-    final_msg = MagicMock()
-    final_msg.usage.input_tokens = 100
-    final_msg.usage.output_tokens = 50
-
-    async def _text_gen() -> AsyncGenerator[str, None]:
+    async def _stream_chunks() -> AsyncGenerator[MagicMock, None]:
         for word in answer.split():
-            yield word + " "
+            chunk = MagicMock()
+            chunk.choices = [MagicMock()]
+            chunk.choices[0].delta.content = word + " "
+            chunk.usage = None
+            yield chunk
+        final = MagicMock()
+        final.choices = []
+        final.usage = MagicMock()
+        final.usage.prompt_tokens = 100
+        final.usage.completion_tokens = 50
+        yield final
 
-    stream_obj = MagicMock()
-    stream_obj.text_stream = _text_gen()
-    stream_obj.get_final_message = AsyncMock(return_value=final_msg)
+    async def _create(*_a: object, stream: bool = False, **_k: object) -> object:
+        if stream:
+            return _stream_chunks()
+        return rewrite_resp
 
-    @asynccontextmanager
-    async def _stream_ctx(*_a: object, **_k: object) -> AsyncGenerator[MagicMock, None]:
-        yield stream_obj
-
-    mock.messages.stream = _stream_ctx
+    mock.chat = MagicMock()
+    mock.chat.completions = MagicMock()
+    mock.chat.completions.create = _create
     return mock
 
 
