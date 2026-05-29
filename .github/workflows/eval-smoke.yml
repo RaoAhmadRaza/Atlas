@@ -23,7 +23,7 @@ jobs:
           EVAL_RETRIEVER_SOURCE: fake_seeded
           EVAL_FAITHFULNESS_JUDGE: noop
         run: |
-          uv run python -m eval_runner.cli run \
+          uv run atlas-eval run \
             --config evals/configs/hybrid_bge.yaml \
             --dataset evals/datasets/smoke_50.jsonl \
             --out evals/reports/

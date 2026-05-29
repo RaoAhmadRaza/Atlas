@@ -70,3 +70,7 @@ def report(report: str, fmt: str) -> None:
         click.echo("\n".join(lines))
     else:
         click.echo(json.dumps(data, indent=2))
+
+
+if __name__ == "__main__":
+    main()
