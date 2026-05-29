@@ -1,0 +1,4 @@
+name: hybrid_bge_compress1k
+retriever: hybrid
+reranker: bge
+budget_tokens: 1000

@@ -1,0 +1,3 @@
+name: bm25_only
+retriever: bm25
+reranker: noop

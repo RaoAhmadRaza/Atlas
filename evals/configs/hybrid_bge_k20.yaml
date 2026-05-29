@@ -1,0 +1,4 @@
+name: hybrid_bge_k20
+retriever: hybrid
+reranker: bge
+k: 20

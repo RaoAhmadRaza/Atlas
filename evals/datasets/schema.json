@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["question_id", "question", "answer", "supporting_docs", "dataset"],
+  "properties": {
+    "question_id": {"type": "string"},
+    "question": {"type": "string"},
+    "answer": {"type": "string"},
+    "supporting_docs": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+    "dataset": {"type": "string"}
+  }
+}

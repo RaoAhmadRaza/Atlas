@@ -23,5 +23,12 @@
 
     get: (path) =>
       fetch(BASE() + path, { headers: tenantHeader() }),
+
+    post: (path, body) =>
+      fetch(BASE() + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...tenantHeader() },
+        body: JSON.stringify(body),
+      }),
   };
 })();
