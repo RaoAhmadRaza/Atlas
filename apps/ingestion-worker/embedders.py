@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import cast
 
 
 class BGEEmbedder:
@@ -25,6 +26,6 @@ class BGEEmbedder:
             vecs = self._model.encode(texts, batch_size=32)
             norms = np.linalg.norm(vecs, axis=1, keepdims=True)
             norms = np.where(norms == 0, 1.0, norms)
-            return (vecs / norms).tolist()
+            return cast(list[list[float]], (vecs / norms).tolist())
 
         return await loop.run_in_executor(None, _encode)

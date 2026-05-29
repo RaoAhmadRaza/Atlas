@@ -1,4 +1,5 @@
 import os
+from typing import Any
 
 import arq
 from dotenv import load_dotenv
@@ -10,7 +11,7 @@ load_dotenv(override=True)
 _redis_dsn = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
 
-async def on_startup(ctx: dict) -> None:
+async def on_startup(ctx: dict[str, Any]) -> None:
     from atlas_core.db.engine import create_engine, get_database_url
     from atlas_core.db.session import create_session_factory, init_default_factory
 
@@ -20,7 +21,7 @@ async def on_startup(ctx: dict) -> None:
     ctx["db_engine"] = engine
 
 
-async def on_shutdown(ctx: dict) -> None:
+async def on_shutdown(ctx: dict[str, Any]) -> None:
     engine = ctx.get("db_engine")
     if engine:
         await engine.dispose()

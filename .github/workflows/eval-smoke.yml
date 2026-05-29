@@ -15,6 +15,7 @@ jobs:
       - uses: astral-sh/setup-uv@v4
         with:
           version: "latest"
+          python-version: "3.12"
       - name: Install deps
         run: uv sync --all-packages
       - name: Run smoke eval
@@ -22,7 +23,7 @@ jobs:
           EVAL_RETRIEVER_SOURCE: fake_seeded
           EVAL_FAITHFULNESS_JUDGE: noop
         run: |
-          uv run atlas-eval run \
+          uv run python -m eval_runner.cli run \
             --config evals/configs/hybrid_bge.yaml \
             --dataset evals/datasets/smoke_50.jsonl \
             --out evals/reports/

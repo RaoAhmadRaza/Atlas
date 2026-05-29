@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 from uuid import UUID
 
 from atlas_core.db.session import with_tenant_session
@@ -8,7 +9,9 @@ from atlas_core.db.session import with_tenant_session
 log = logging.getLogger(__name__)
 
 
-async def run_eval_job(ctx: dict, eval_run_id: str, tenant_id: str, config_name: str) -> None:
+async def run_eval_job(
+    ctx: dict[str, Any], eval_run_id: str, tenant_id: str, config_name: str
+) -> None:
     from eval_runner.config import load_config
     from eval_runner.dataset import load_jsonl
     from eval_runner.persist import save_eval_run

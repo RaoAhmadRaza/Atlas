@@ -16,7 +16,7 @@ jobs:
       - run: uv sync --all-packages
       - run: uv run ruff check .
       - run: uv run ruff format --check .
-      - run: uv run mypy packages/atlas-core apps/api apps/ingestion-worker/tasks apps/ingestion-worker/worker.py apps/ingestion-worker/embedders.py
+      - run: uv run mypy packages/atlas-core apps/api apps/ingestion-worker/tasks apps/ingestion-worker/worker.py apps/ingestion-worker/embedders.py apps/eval-runner
 
   lint-node:
     runs-on: ubuntu-latest
