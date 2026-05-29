@@ -46,7 +46,6 @@ async def save_eval_run(
                 ndcg_at_10=q.ndcg_at_10,
                 faithfulness=q.faithfulness,
                 latency_ms=q.latency_ms,
-                cost_usd=q.cost_usd,
                 generated_answer=q.generated_answer,
                 error=q.error,
             )
